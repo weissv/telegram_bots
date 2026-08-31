@@ -1,0 +1,24 @@
+{
+  "name": "@telegram-commerce/telegram-engine",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@grammyjs/conversations": "^2.0.1",
+    "@grammyjs/runner": "^2.0.3",
+    "@telegram-commerce/config": "workspace:*",
+    "@telegram-commerce/database": "workspace:*",
+    "@telegram-commerce/payments": "workspace:*",
+    "grammy": "^1.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2"
+  }
+}

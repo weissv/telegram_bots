@@ -1,0 +1,142 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Plan {
+  BASIC_20
+  PRO_30
+  STANDALONE_LIFETIME
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  CANCELLED
+  DELIVERED
+}
+
+enum AdminRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+model Tenant {
+  id                String         @id @default(uuid())
+  name              String
+  owner_telegram_id String
+  plan              Plan           @default(BASIC_20)
+  is_active         Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  botConfig         BotConfig?
+  subscriptions     Subscription[]
+  products          Product[]
+  orders            Order[]
+  adminUsers        AdminUser[]
+
+  @@index([owner_telegram_id])
+  @@index([plan])
+}
+
+model BotConfig {
+  tenant_id            String   @id
+  bot_token_encrypted  String
+  bot_username         String?
+  webhook_secret       String
+  currency             String   @default("USD")
+  theme_config         Json     @default("{}")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant               Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([bot_username])
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  tenant_id              String
+  stripe_customer_id     String?
+  stripe_subscription_id String?            @unique
+  status                 SubscriptionStatus @default(ACTIVE)
+  current_period_end     DateTime?
+  cancel_at_period_end   Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  tenant                 Tenant             @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([status])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  title       String
+  description String
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)
+  images      String[] @default([])
+  category    String   @default("General")
+  is_active   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([tenant_id, category])
+  @@index([tenant_id, is_active])
+}
+
+model Order {
+  id                   String      @id @default(uuid())
+  tenant_id            String
+  customer_telegram_id String
+  customer_name        String?
+  total_amount         Decimal     @db.Decimal(10, 2)
+  status               OrderStatus @default(PENDING)
+  payment_method       String      @default("TELEGRAM_PAY")
+  payment_id           String?
+  items                Json        @default("[]")
+  shipping_address     String?
+  customer_phone       String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  tenant               Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([tenant_id, status])
+  @@index([customer_telegram_id])
+}
+
+model AdminUser {
+  id            String    @id @default(uuid())
+  tenant_id     String
+  email         String
+  password_hash String
+  role          AdminRole @default(OWNER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@unique([tenant_id, email])
+  @@index([tenant_id])
+}

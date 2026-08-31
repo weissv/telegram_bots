@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tg_commerce_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: telegram_commerce
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tg_commerce_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: tg_commerce_api
+    restart: always
+    environment:
+      MODE: saas
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/telegram_commerce?schema=public
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-http://localhost:5173}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5174}
+      PUBLIC_LANDING_URL: ${PUBLIC_LANDING_URL:-http://localhost:5175}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  master-bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.masterbot
+    container_name: tg_commerce_masterbot
+    restart: always
+    environment:
+      MODE: saas
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/telegram_commerce?schema=public
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      MASTER_BOT_TOKEN: ${MASTER_BOT_TOKEN}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-http://localhost:5173}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5174}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  miniapp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.miniapp
+    container_name: tg_commerce_miniapp
+    restart: always
+    ports:
+      - "5173:80"
+
+  admin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.admin
+    container_name: tg_commerce_admin
+    restart: always
+    ports:
+      - "5174:80"
+
+  landing:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.landing
+    container_name: tg_commerce_landing
+    restart: always
+    ports:
+      - "5175:80"
+
+volumes:
+  pgdata:
+  redisdata:
