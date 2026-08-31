@@ -3,6 +3,7 @@ import { createOrderCheckoutSession, createMockPaymentSession, PaymentSessionRes
 import { getEnv, ORDER_STATUS } from '@telegram-commerce/config';
 import { sendMerchantOrderAlert } from '@telegram-commerce/telegram-engine';
 import { getOrInitBot, getTenantBotData } from './botManager.js';
+import { enqueueReservationExpiry, cancelReservationExpiry } from './reservationWorker.js';
 
 export interface CheckoutOrderItem {
   productId: string;
@@ -121,6 +122,14 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
     };
   });
 
+  // Enqueue 15-minute reservation expiry job
+  await enqueueReservationExpiry({
+    orderId: order.id,
+    tenantId,
+    customerTelegramId: String(customerTelegramId),
+    items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+  });
+
   const env = getEnv();
   const defaultSuccessUrl = params.successUrl || `${env.PUBLIC_API_URL}/api/v1/shop/orders/${order.id}/success`;
   const defaultCancelUrl = params.cancelUrl || `${env.PUBLIC_API_URL}/api/v1/shop/orders/${order.id}/cancel`;
@@ -181,6 +190,9 @@ export async function fulfillOrder(orderId: string, paymentId?: string): Promise
   if (!order || order.status === ORDER_STATUS.PAID) {
     return;
   }
+
+  // Cancel the pending reservation expiry job since order is now paid
+  await cancelReservationExpiry(orderId);
 
   await prisma.order.update({
     where: { id: orderId },

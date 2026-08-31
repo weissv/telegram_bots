@@ -1,25 +1,37 @@
+import { InlineKeyboard } from 'grammy';
 import { BotContext } from '../types.js';
 import { getMainMenuKeyboard } from '../keyboards/index.js';
-import { getEnv, PLAN_TIERS } from '@telegram-commerce/config';
+import { t } from '@telegram-commerce/i18n';
+import { PLAN_TIERS } from '@telegram-commerce/config';
 
+/**
+ * Handles /start command. Shows language selector on first interaction,
+ * then localized welcome message with store banner.
+ */
 export async function handleStart(ctx: BotContext) {
   const { tenant } = ctx;
+
+  // If user has not selected a language yet, show language picker
+  if (!ctx.session.languageSelected) {
+    await handleLanguageSelection(ctx);
+    return;
+  }
+
+  const locale = ctx.locale;
   const storeName = tenant.themeConfig?.storeName || tenant.name || 'Store';
   const bannerUrl = tenant.themeConfig?.bannerUrl;
-  const description =
-    tenant.themeConfig?.description || 'Browse our catalog and place your order directly in Telegram.';
-
+  const description = tenant.themeConfig?.description || t(locale, 'start.description_default');
   const isPro = tenant.plan === PLAN_TIERS.PRO_30 || tenant.plan === PLAN_TIERS.STANDALONE_LIFETIME;
 
   const welcomeMessage = `
-🛍️ <b>Welcome to ${escapeHtml(storeName)}!</b>
+${t(locale, 'start.welcome', { storeName: escapeHtml(storeName) })}
 
 ${escapeHtml(description)}
 
-${isPro ? '✨ <i>Tip: Tap the "🛍️ Open Storefront App" button below for an immersive visual shopping experience!</i>' : '📦 <i>Use the keyboard below to browse products, manage your cart, and track orders.</i>'}
+${isPro ? t(locale, 'start.tip_pro') : t(locale, 'start.tip_basic')}
 `.trim();
 
-  const keyboard = getMainMenuKeyboard(tenant);
+  const keyboard = getMainMenuKeyboard(tenant, locale);
 
   if (bannerUrl) {
     try {
@@ -36,6 +48,19 @@ ${isPro ? '✨ <i>Tip: Tap the "🛍️ Open Storefront App" button below for an
 
   await ctx.reply(welcomeMessage, {
     parse_mode: 'HTML',
+    reply_markup: keyboard,
+  });
+}
+
+/**
+ * Shows the inline language selector keyboard.
+ */
+export async function handleLanguageSelection(ctx: BotContext) {
+  const keyboard = new InlineKeyboard()
+    .text('🇷🇺 Русский', 'lang:ru')
+    .text("🇺🇿 O'zbekcha", 'lang:uz');
+
+  await ctx.reply(t(ctx.locale, 'lang.select'), {
     reply_markup: keyboard,
   });
 }

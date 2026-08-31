@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useTelegram } from './hooks/useTelegram.js';
 import { useCart } from './hooks/useCart.js';
+import { I18nProvider, useI18n } from './i18n/useI18n.js';
 import { Header } from './components/Header.js';
 import { ProductCard } from './components/ProductCard.js';
 import { CartDrawer } from './components/CartDrawer.js';
@@ -10,8 +11,9 @@ import { Sparkles, Store, AlertCircle } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-export function App() {
+function AppContent() {
   const { user, initData, haptic } = useTelegram();
+  const { locale, setLocale, t, formatCurrency } = useI18n();
 
   // Extract tenantId from URL query param
   const urlParams = new URLSearchParams(window.location.search);
@@ -129,7 +131,7 @@ export function App() {
         window.location.href = data.payment.paymentUrl;
       }
     } catch (err: any) {
-      alert(`Checkout failed: ${err.message}`);
+      alert(`${t('checkout.failed', { error: err.message })}`);
     } finally {
       setIsProcessingCheckout(false);
     }
@@ -144,7 +146,7 @@ export function App() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6 space-y-4">
         <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-medium text-slate-400">Loading storefront...</p>
+        <p className="text-sm font-medium text-slate-400">{t('miniapp.loading')}</p>
       </div>
     );
   }
@@ -153,7 +155,7 @@ export function App() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6 text-center space-y-4">
         <AlertCircle className="w-12 h-12 text-rose-400" />
-        <h2 className="text-lg font-bold text-slate-100">Store Not Available</h2>
+        <h2 className="text-lg font-bold text-slate-100">{t('miniapp.error_title')}</h2>
         <p className="text-sm text-slate-400 max-w-xs">{error}</p>
       </div>
     );
@@ -167,6 +169,8 @@ export function App() {
         onOpenCart={() => setIsCartOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        locale={locale}
+        onLocaleChange={setLocale}
       />
 
       {/* Banner */}
@@ -181,7 +185,7 @@ export function App() {
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-4">
               <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                Featured Collection
+                {t('miniapp.featured')}
               </span>
             </div>
           </div>
@@ -214,18 +218,18 @@ export function App() {
       <main className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-slate-200">
-            {selectedCategory === 'All' ? 'All Products' : selectedCategory}
+            {selectedCategory === 'All' ? t('miniapp.all_products') : selectedCategory}
           </h2>
           <span className="text-xs text-slate-500">
-            {filteredProducts.length} items
+            {t('miniapp.items_count', { count: filteredProducts.length })}
           </span>
         </div>
 
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16 rounded-2xl bg-slate-900/40 border border-slate-800/60 p-6 space-y-2">
             <Store className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-sm font-semibold text-slate-300">No products found</p>
-            <p className="text-xs text-slate-500">Try changing your search or category filter.</p>
+            <p className="text-sm font-semibold text-slate-300">{t('miniapp.no_products')}</p>
+            <p className="text-xs text-slate-500">{t('miniapp.no_products_hint')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3.5">
@@ -270,5 +274,13 @@ export function App() {
         isProcessing={isProcessingCheckout}
       />
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   );
 }

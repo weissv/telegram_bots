@@ -1,45 +1,35 @@
 import { BotContext } from '../types.js';
-import { InlineKeyboard } from 'grammy';
-import { getEnv, PLAN_TIERS } from '@telegram-commerce/config';
 import { getUpgradeInlineKeyboard } from '../keyboards/index.js';
+import { getEnv, PLAN_TIERS } from '@telegram-commerce/config';
+import { t } from '@telegram-commerce/i18n';
 
 export async function handleWebApp(ctx: BotContext) {
   const { tenant } = ctx;
+  const locale = ctx.locale;
   const env = getEnv();
 
-  const isProOrStandalone =
-    tenant.plan === PLAN_TIERS.PRO_30 || tenant.plan === PLAN_TIERS.STANDALONE_LIFETIME;
+  const isPro = tenant.plan === PLAN_TIERS.PRO_30 || tenant.plan === PLAN_TIERS.STANDALONE_LIFETIME;
 
-  if (isProOrStandalone) {
+  if (isPro) {
     const webAppUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=${tenant.id}`;
-    const keyboard = new InlineKeyboard().webApp('🛍️ Open Storefront App', webAppUrl);
-
-    await ctx.reply(
-      '✨ <b>Tap below to open our interactive Mini App Storefront:</b>',
-      {
-        parse_mode: 'HTML',
-        reply_markup: keyboard,
-      }
-    );
+    await ctx.reply(t(locale, 'webapp.launch'), {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: t(locale, 'kb.open_store'), web_app: { url: webAppUrl } }],
+        ],
+      },
+    });
   } else {
-    // Basic $20 Plan Feature Gate
-    const keyboard = getUpgradeInlineKeyboard();
-    await ctx.reply(
-      `
-🚀 <b>Telegram Mini App Storefront</b>
+    const text = `
+${t(locale, 'webapp.upgrade_title')}
 
-The interactive Mini App is available on the <b>Pro Plan ($30/mo)</b> or <b>Standalone VPS ($350)</b>.
+${t(locale, 'webapp.upgrade_body')}
+`.trim();
 
-<b>Pro Plan Features:</b>
- • Full-screen visual app storefront with animated cart & search
- • Native Telegram theme integration and haptic feedback
- • Category filters and high-resolution photo galleries
- • Instant single-tap checkout
-`.trim(),
-      {
-        parse_mode: 'HTML',
-        reply_markup: keyboard,
-      }
-    );
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: getUpgradeInlineKeyboard(locale),
+    });
   }
 }

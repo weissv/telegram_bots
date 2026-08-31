@@ -1,8 +1,10 @@
 import { BotContext } from '../types.js';
 import { getCatalogInlineKeyboard } from '../keyboards/index.js';
+import { t, formatCurrency } from '@telegram-commerce/i18n';
 
 export async function handleCatalog(ctx: BotContext, targetPage = 1, targetCategory?: string) {
   const { db, tenant } = ctx;
+  const locale = ctx.locale;
 
   const category = targetCategory === 'all' ? undefined : targetCategory || ctx.session.currentCategory;
   ctx.session.currentCategory = category;
@@ -33,11 +35,9 @@ export async function handleCatalog(ctx: BotContext, targetPage = 1, targetCateg
   if (totalCount === 0 || products.length === 0) {
     await ctx.reply(
       category
-        ? `No products found in category "<b>${category}</b>".`
-        : '📦 Our product catalog is currently being updated. Please check back soon!',
-      {
-        parse_mode: 'HTML',
-      }
+        ? t(locale, 'catalog.empty_category', { category })
+        : t(locale, 'catalog.empty'),
+      { parse_mode: 'HTML' }
     );
     return;
   }
@@ -48,21 +48,21 @@ export async function handleCatalog(ctx: BotContext, targetPage = 1, targetCateg
 
   const stockBadge =
     product.stock > 10
-      ? '🟢 In Stock'
+      ? t(locale, 'catalog.stock_in')
       : product.stock > 0
-        ? `🟡 Low Stock (${product.stock} left)`
-        : '🔴 Out of Stock';
+        ? t(locale, 'catalog.stock_low', { count: product.stock })
+        : t(locale, 'catalog.stock_out');
 
   const caption = `
-🏷️ <b>${escapeHtml(product.title)}</b>
-📁 <i>Category: ${escapeHtml(product.category)}</i>
+${t(locale, 'catalog.title', { title: escapeHtml(product.title) })}
+${t(locale, 'catalog.category', { category: escapeHtml(product.category) })}
 
 ${escapeHtml(product.description || '')}
 
-💵 <b>Price:</b> <code>${Number(product.price).toFixed(2)} ${currency}</code>
-📦 <b>Status:</b> ${stockBadge}
+${t(locale, 'catalog.price', { price: formatCurrency(Number(product.price), currency, locale) })}
+📦 <b>${locale === 'ru' ? 'Статус' : 'Holat'}:</b> ${stockBadge}
 
-<i>Item ${targetPage} of ${totalPages}</i>
+${t(locale, 'catalog.item_of', { current: targetPage, total: totalPages })}
 `.trim();
 
   const keyboard = getCatalogInlineKeyboard(
@@ -70,6 +70,7 @@ ${escapeHtml(product.description || '')}
     targetPage,
     totalPages,
     categories,
+    locale,
     category
   );
 
@@ -89,7 +90,7 @@ ${escapeHtml(product.description || '')}
       await ctx.answerCallbackQuery();
       return;
     } catch {
-      // If edit fails (e.g. same content or media conversion issue), edit caption or reply
+      // fallback
     }
   }
 
@@ -103,7 +104,7 @@ ${escapeHtml(product.description || '')}
       await ctx.answerCallbackQuery();
       return;
     } catch {
-      // Fallback
+      // fallback
     }
   }
 
@@ -116,7 +117,7 @@ ${escapeHtml(product.description || '')}
       });
       return;
     } catch {
-      // Fallback to text
+      // fallback to text
     }
   }
 

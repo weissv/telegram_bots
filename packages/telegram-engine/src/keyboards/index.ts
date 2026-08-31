@@ -1,11 +1,12 @@
 import { InlineKeyboard, Keyboard } from 'grammy';
 import { TenantInfo, CartItem } from '../types.js';
 import { getEnv, PLAN_TIERS } from '@telegram-commerce/config';
+import { t, type Locale } from '@telegram-commerce/i18n';
 
 /**
  * Builds standard reply keyboard for bottom menu bar.
  */
-export function getMainMenuKeyboard(tenant: TenantInfo): Keyboard {
+export function getMainMenuKeyboard(tenant: TenantInfo, locale: Locale): Keyboard {
   const env = getEnv();
   const keyboard = new Keyboard();
 
@@ -14,15 +15,17 @@ export function getMainMenuKeyboard(tenant: TenantInfo): Keyboard {
 
   if (isProOrStandalone) {
     const webAppUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=${tenant.id}`;
-    keyboard.webApp('🛍️ Open Storefront App', webAppUrl).row();
+    keyboard.webApp(t(locale, 'kb.open_store'), webAppUrl).row();
   }
 
   keyboard
-    .text('📦 Catalog')
-    .text('🛒 Cart')
+    .text(t(locale, 'kb.catalog'))
+    .text(t(locale, 'kb.cart'))
     .row()
-    .text('📋 My Orders')
-    .text('ℹ️ Store Info');
+    .text(t(locale, 'kb.my_orders'))
+    .text(t(locale, 'kb.store_info'))
+    .row()
+    .text(t(locale, 'kb.change_lang'));
 
   return keyboard.resized().persistent();
 }
@@ -35,6 +38,7 @@ export function getCatalogInlineKeyboard(
   page: number,
   totalPages: number,
   categories: string[],
+  locale: Locale,
   currentCategory?: string
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
@@ -49,23 +53,26 @@ export function getCatalogInlineKeyboard(
   }
 
   // Add to cart button
-  keyboard.row(InlineKeyboard.text('🛒 Add to Cart (+1)', `cart:add:${productId}`));
+  keyboard.row(InlineKeyboard.text(t(locale, 'catalog.add_to_cart'), `cart:add:${productId}`));
 
   // Pagination navigation row
   const navRow = [];
   if (page > 1) {
-    navRow.push(InlineKeyboard.text('⬅️ Prev', `page:${page - 1}`));
+    navRow.push(InlineKeyboard.text(t(locale, 'catalog.prev'), `page:${page - 1}`));
   }
-  navRow.push(InlineKeyboard.text(`📄 ${page}/${Math.max(1, totalPages)}`, 'noop'));
+  navRow.push(InlineKeyboard.text(
+    t(locale, 'catalog.page_of', { current: page, total: Math.max(1, totalPages) }),
+    'noop'
+  ));
   if (page < totalPages) {
-    navRow.push(InlineKeyboard.text('Next ➡️', `page:${page + 1}`));
+    navRow.push(InlineKeyboard.text(t(locale, 'catalog.next'), `page:${page + 1}`));
   }
   keyboard.row(...navRow);
 
   // Quick shortcuts
   keyboard.row(
-    InlineKeyboard.text('🛒 View Cart', 'cart:view'),
-    InlineKeyboard.text('🔍 All Categories', 'cat:all')
+    InlineKeyboard.text(t(locale, 'catalog.view_cart'), 'cart:view'),
+    InlineKeyboard.text(t(locale, 'catalog.all_categories'), 'cat:all')
   );
 
   return keyboard;
@@ -74,11 +81,11 @@ export function getCatalogInlineKeyboard(
 /**
  * Builds interactive cart viewer inline keyboard.
  */
-export function getCartInlineKeyboard(cart: CartItem[], currency: string): InlineKeyboard {
+export function getCartInlineKeyboard(cart: CartItem[], currency: string, locale: Locale): InlineKeyboard {
   const keyboard = new InlineKeyboard();
 
   if (cart.length === 0) {
-    keyboard.text('📦 Browse Products', 'catalog:browse');
+    keyboard.text(t(locale, 'cart.continue'), 'catalog:browse');
     return keyboard;
   }
 
@@ -94,11 +101,11 @@ export function getCartInlineKeyboard(cart: CartItem[], currency: string): Inlin
 
   // Action buttons
   keyboard.row(
-    InlineKeyboard.text('💳 Proceed to Checkout', 'cart:checkout'),
-    InlineKeyboard.text('🗑️ Clear Cart', 'cart:clear')
+    InlineKeyboard.text(t(locale, 'cart.checkout'), 'cart:checkout'),
+    InlineKeyboard.text(t(locale, 'cart.clear'), 'cart:clear')
   );
 
-  keyboard.row(InlineKeyboard.text('📦 Continue Shopping', 'catalog:browse'));
+  keyboard.row(InlineKeyboard.text(t(locale, 'cart.continue'), 'catalog:browse'));
 
   return keyboard;
 }
@@ -106,9 +113,9 @@ export function getCartInlineKeyboard(cart: CartItem[], currency: string): Inlin
 /**
  * Builds upgrade upsell inline keyboard for Basic plan merchants/customers.
  */
-export function getUpgradeInlineKeyboard(): InlineKeyboard {
+export function getUpgradeInlineKeyboard(locale: Locale): InlineKeyboard {
   const env = getEnv();
   const keyboard = new InlineKeyboard();
-  keyboard.url('🚀 Upgrade to Pro Mini App ($30/mo)', `${env.PUBLIC_LANDING_URL}#pricing`);
+  keyboard.url(t(locale, 'webapp.upgrade_btn'), `${env.PUBLIC_LANDING_URL}#pricing`);
   return keyboard;
 }

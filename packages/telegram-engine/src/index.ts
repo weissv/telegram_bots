@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './engine.js';
 export * from './keyboards/index.js';
 export * from './notifications/adminAlerts.js';
+export * from './session/redisStorage.js';
 export * from './handlers/start.js';
 export * from './handlers/catalog.js';
 export * from './handlers/cart.js';

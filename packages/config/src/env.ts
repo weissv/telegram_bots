@@ -28,6 +28,18 @@ export const envSchema = z.object({
   STANDALONE_TENANT_ID: z.string().default('00000000-0000-0000-0000-000000000001'),
   STANDALONE_BOT_TOKEN: z.string().optional(),
   STANDALONE_ADMIN_TELEGRAM_ID: z.string().optional(),
+
+  // Payme (Uzbekistan)
+  PAYME_MERCHANT_ID: z.string().optional(),
+  PAYME_MERCHANT_KEY: z.string().optional(),
+
+  // Click (Uzbekistan)
+  CLICK_SERVICE_ID: z.string().optional(),
+  CLICK_MERCHANT_ID: z.string().optional(),
+  CLICK_SECRET_KEY: z.string().optional(),
+
+  // Locale
+  DEFAULT_LOCALE: z.enum(['ru', 'uz']).default('ru'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -1,6 +1,7 @@
 import { Context, SessionFlavor } from 'grammy';
 import { ConversationFlavor } from '@grammyjs/conversations';
 import { TenantDbClient } from '@telegram-commerce/database';
+import type { Locale } from '@telegram-commerce/i18n';
 
 export interface CartItem {
   productId: string;
@@ -15,6 +16,8 @@ export interface SessionData {
   catalogPage?: number;
   customerPhone?: string;
   shippingAddress?: string;
+  locale: Locale;
+  languageSelected: boolean;
 }
 
 export interface TenantInfo {
@@ -37,4 +40,5 @@ export type BaseBotContext = Context & SessionFlavor<SessionData>;
 export type BotContext = ConversationFlavor<BaseBotContext> & {
   tenant: TenantInfo;
   db: TenantDbClient;
+  locale: Locale;
 };

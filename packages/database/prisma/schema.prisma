@@ -99,6 +99,7 @@ model Product {
 
   tenant      Tenant   @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
+  @@unique([id, tenant_id])
   @@index([tenant_id])
   @@index([tenant_id, category])
   @@index([tenant_id, is_active])
@@ -121,6 +122,7 @@ model Order {
 
   tenant               Tenant      @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 
+  @@unique([id, tenant_id])
   @@index([tenant_id])
   @@index([tenant_id, status])
   @@index([customer_telegram_id])
@@ -132,6 +134,7 @@ model AdminUser {
   email         String
   password_hash String
   role          AdminRole @default(OWNER)
+  language      String    @default("ru")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

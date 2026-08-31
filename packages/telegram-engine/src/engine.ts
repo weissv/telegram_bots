@@ -1,7 +1,10 @@
 import { Bot, session } from 'grammy';
+import Redis from 'ioredis';
 import { BotContext, SessionData, TenantInfo, CartItem } from './types.js';
 import { getTenantDb } from '@telegram-commerce/database';
-import { handleStart } from './handlers/start.js';
+import { t, detectLocale, type Locale } from '@telegram-commerce/i18n';
+import { createRedisSessionStorage } from './session/redisStorage.js';
+import { handleStart, handleLanguageSelection } from './handlers/start.js';
 import { handleCatalog } from './handlers/catalog.js';
 import { handleAddToCart, handleViewCart, handleCartCheckout } from './handlers/cart.js';
 import { handleOrders } from './handlers/orders.js';
@@ -10,29 +13,60 @@ import { handleWebApp } from './handlers/webapp.js';
 export interface CreateTenantBotOptions {
   tenant: TenantInfo;
   botToken: string;
+  redisUrl?: string;
 }
 
 /**
  * Creates and configures a dynamic grammY Bot instance for a specific tenant.
+ * Uses Redis-backed sessions with composite keys when REDIS_URL is available.
  */
 export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext> {
-  const { tenant, botToken } = options;
+  const { tenant, botToken, redisUrl } = options;
   const bot = new Bot<BotContext>(botToken);
 
-  // In-memory session middleware
-  bot.use(
-    session({
-      initial: (): SessionData => ({
-        cart: [],
-        catalogPage: 1,
-      }),
-    })
-  );
+  // Redis or in-memory session middleware
+  if (redisUrl) {
+    const redis = new Redis(redisUrl, { maxRetriesPerRequest: 3, lazyConnect: true });
+    redis.connect().catch((err) => {
+      console.warn(`[Session Redis] Connection failed for tenant ${tenant.id}, falling back to memory:`, err.message);
+    });
 
-  // Inject tenant and tenant-isolated database into context
+    bot.use(
+      session({
+        initial: (): SessionData => ({
+          cart: [],
+          catalogPage: 1,
+          locale: 'ru',
+          languageSelected: false,
+        }),
+        storage: createRedisSessionStorage<SessionData>(redis, tenant.id),
+      })
+    );
+  } else {
+    bot.use(
+      session({
+        initial: (): SessionData => ({
+          cart: [],
+          catalogPage: 1,
+          locale: 'ru',
+          languageSelected: false,
+        }),
+      })
+    );
+  }
+
+  // Inject tenant, tenant-isolated database, and locale into context
   bot.use(async (ctx, next) => {
     ctx.tenant = tenant;
     ctx.db = getTenantDb(tenant.id);
+
+    // Determine locale from session, falling back to Telegram language_code
+    if (ctx.session?.locale) {
+      ctx.locale = ctx.session.locale;
+    } else {
+      ctx.locale = detectLocale(ctx.from?.language_code);
+    }
+
     await next();
   });
 
@@ -47,29 +81,25 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
   bot.command('cart', handleViewCart);
   bot.command('orders', handleOrders);
   bot.command('webapp', handleWebApp);
+  bot.command('lang', (ctx) => handleLanguageSelection(ctx));
   bot.command('help', async (ctx) => {
+    const locale = ctx.locale;
     await ctx.reply(
-      `
-🤖 <b>Store Navigation Help</b>
-
-• /start - Welcome message & main menu
-• /catalog - Browse available products
-• /cart - View and manage your shopping cart
-• /orders - Check status of your recent orders
-• /webapp - Launch interactive Storefront App
-`.trim(),
+      `${t(locale, 'help.title')}\n\n${t(locale, 'help.commands')}`,
       { parse_mode: 'HTML' }
     );
   });
 
-  // Text menu replies
-  bot.hears('📦 Catalog', (ctx) => handleCatalog(ctx, 1));
-  bot.hears('🛒 Cart', handleViewCart);
-  bot.hears('📋 My Orders', handleOrders);
-  bot.hears('ℹ️ Store Info', async (ctx) => {
-    const info = ctx.tenant.themeConfig?.description || 'Premium Telegram Commerce Storefront';
-    await ctx.reply(`ℹ️ <b>Store Information</b>\n\n${info}`, { parse_mode: 'HTML' });
+  // Text menu replies (support both RU and UZ button labels)
+  bot.hears(['📦 Каталог', '📦 Katalog'], (ctx) => handleCatalog(ctx, 1));
+  bot.hears(['🛒 Корзина', '🛒 Savatcha'], handleViewCart);
+  bot.hears(['📋 Мои заказы', '📋 Buyurtmalarim'], handleOrders);
+  bot.hears(['ℹ️ О магазине', "ℹ️ Do'kon haqida"], async (ctx) => {
+    const locale = ctx.locale;
+    const info = ctx.tenant.themeConfig?.description || t(locale, 'store_info.default');
+    await ctx.reply(`${t(locale, 'store_info.title')}\n\n${info}`, { parse_mode: 'HTML' });
   });
+  bot.hears(['🌐 Язык', '🌐 Til'], (ctx) => handleLanguageSelection(ctx));
 
   // Callback queries
   bot.on('callback_query:data', async (ctx) => {
@@ -77,6 +107,20 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
 
     if (data === 'noop') {
       await ctx.answerCallbackQuery();
+      return;
+    }
+
+    // Language selection callbacks
+    if (data === 'lang:ru' || data === 'lang:uz') {
+      const newLocale = data.substring(5) as Locale;
+      ctx.session.locale = newLocale;
+      ctx.session.languageSelected = true;
+      ctx.locale = newLocale;
+
+      await ctx.answerCallbackQuery({ text: t(newLocale, 'lang.selected') });
+
+      // Show welcome message after language selection
+      await handleStart(ctx);
       return;
     }
 

@@ -3,23 +3,26 @@ import { BotContext, CartItem } from '../types.js';
 import { getCartInlineKeyboard } from '../keyboards/index.js';
 import { createOrderCheckoutSession, createMockPaymentSession } from '@telegram-commerce/payments';
 import { getEnv, ORDER_STATUS } from '@telegram-commerce/config';
+import { t, formatCurrency } from '@telegram-commerce/i18n';
 
 export async function handleAddToCart(ctx: BotContext, productId: string) {
   const { db } = ctx;
+  const locale = ctx.locale;
+
   const product = await db.product.findFirst({
     where: { id: productId, is_active: true },
   });
 
   if (!product) {
     if (ctx.callbackQuery) {
-      await ctx.answerCallbackQuery({ text: 'Product not found or unavailable.', show_alert: true });
+      await ctx.answerCallbackQuery({ text: t(locale, 'cart.not_found'), show_alert: true });
     }
     return;
   }
 
   if (product.stock <= 0) {
     if (ctx.callbackQuery) {
-      await ctx.answerCallbackQuery({ text: 'Sorry, this product is currently out of stock!', show_alert: true });
+      await ctx.answerCallbackQuery({ text: t(locale, 'cart.out_of_stock'), show_alert: true });
     }
     return;
   }
@@ -32,7 +35,10 @@ export async function handleAddToCart(ctx: BotContext, productId: string) {
   if (existing) {
     if (existing.quantity >= product.stock) {
       if (ctx.callbackQuery) {
-        await ctx.answerCallbackQuery({ text: `Cannot add more. Only ${product.stock} available.`, show_alert: true });
+        await ctx.answerCallbackQuery({
+          text: t(locale, 'cart.max_stock', { stock: product.stock }),
+          show_alert: true,
+        });
       }
       return;
     }
@@ -48,19 +54,20 @@ export async function handleAddToCart(ctx: BotContext, productId: string) {
 
   if (ctx.callbackQuery) {
     await ctx.answerCallbackQuery({
-      text: `Added "${product.title}" to cart! 🛒`,
+      text: t(locale, 'cart.added', { title: product.title }),
     });
   }
 }
 
 export async function handleViewCart(ctx: BotContext) {
   const { tenant } = ctx;
+  const locale = ctx.locale;
   const cart: CartItem[] = ctx.session.cart || [];
   const currency = tenant.currency || 'USD';
 
   if (cart.length === 0) {
-    const text = '🛒 <b>Your cart is currently empty!</b>\n\nBrowse our catalog to add items.';
-    const keyboard = new InlineKeyboard().text('📦 Browse Catalog', 'catalog:browse');
+    const text = t(locale, 'cart.empty');
+    const keyboard = new InlineKeyboard().text(t(locale, 'cart.continue'), 'catalog:browse');
 
     if (ctx.callbackQuery) {
       await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(async () => {
@@ -76,23 +83,28 @@ export async function handleViewCart(ctx: BotContext) {
   const total = cart.reduce((sum: number, item: CartItem) => sum + item.price * item.quantity, 0);
 
   const itemsList = cart
-    .map(
-      (item: CartItem, idx: number) =>
-        `${idx + 1}. <b>${escapeHtml(item.title)}</b>\n   ${item.quantity} × ${item.price.toFixed(2)} = <code>${(item.quantity * item.price).toFixed(2)} ${currency}</code>`
+    .map((item: CartItem, idx: number) =>
+      t(locale, 'cart.item_line', {
+        idx: idx + 1,
+        title: escapeHtml(item.title),
+        qty: item.quantity,
+        price: formatCurrency(item.price, currency, locale),
+        subtotal: formatCurrency(item.quantity * item.price, currency, locale),
+      })
     )
     .join('\n\n');
 
   const text = `
-🛒 <b>YOUR SHOPPING CART</b>
+${t(locale, 'cart.title')}
 
 ${itemsList}
 
 ━━━━━━━━━━━━━━━━━━━
-💰 <b>Total:</b> <b>${total.toFixed(2)} ${currency}</b>
+${t(locale, 'cart.total', { total: formatCurrency(total, currency, locale) })}
 ━━━━━━━━━━━━━━━━━━━
 `.trim();
 
-  const keyboard = getCartInlineKeyboard(cart, currency);
+  const keyboard = getCartInlineKeyboard(cart, currency, locale);
 
   if (ctx.callbackQuery) {
     await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard }).catch(async () => {
@@ -106,12 +118,13 @@ ${itemsList}
 
 export async function handleCartCheckout(ctx: BotContext) {
   const { db, tenant, from } = ctx;
+  const locale = ctx.locale;
   const cart: CartItem[] = ctx.session.cart || [];
   const currency = tenant.currency || 'USD';
 
   if (cart.length === 0) {
     if (ctx.callbackQuery) {
-      await ctx.answerCallbackQuery({ text: 'Your cart is empty!', show_alert: true });
+      await ctx.answerCallbackQuery({ text: t(locale, 'cart.empty_alert'), show_alert: true });
     }
     return;
   }
@@ -130,7 +143,7 @@ export async function handleCartCheckout(ctx: BotContext) {
       status: ORDER_STATUS.PENDING as any,
       payment_method: 'STRIPE_OR_MOCK',
       items: cart as any,
-      shipping_address: ctx.session.shippingAddress || 'To be specified',
+      shipping_address: ctx.session.shippingAddress || '',
       customer_phone: ctx.session.customerPhone,
     },
   });
@@ -174,15 +187,15 @@ export async function handleCartCheckout(ctx: BotContext) {
     });
   }
 
-  const payKeyboard = new InlineKeyboard().url('💳 Pay Now', sessionResult.paymentUrl);
+  const payKeyboard = new InlineKeyboard().url(t(locale, 'checkout.pay_now'), sessionResult.paymentUrl);
 
   const text = `
-🎉 <b>Order Created!</b>
+${t(locale, 'checkout.created')}
 
-🧾 <b>Order:</b> <code>#${order.id.slice(0, 8)}</code>
-💰 <b>Total:</b> <b>${total.toFixed(2)} ${currency}</b>
+${t(locale, 'checkout.order_id', { orderId: order.id.slice(0, 8) })}
+${t(locale, 'checkout.total', { total: formatCurrency(total, currency, locale) })}
 
-Please click the button below to complete your secure payment.
+${t(locale, 'checkout.pay_prompt')}
 `.trim();
 
   // Clear cart after checkout initiation
