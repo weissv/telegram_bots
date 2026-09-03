@@ -29,4 +29,4 @@ COPY --from=builder /app/apps/api/ ./apps/api/
 COPY --from=builder /app/node_modules/ ./node_modules/
 
 EXPOSE 3000
-CMD ["sh", "-c", "echo '🔄 Applying Prisma DB schema...' && pnpm --filter @telegram-commerce/database db:push --accept-data-loss && echo '🚀 Starting API...' && node apps/api/dist/index.js"]
+CMD ["sh", "-c", "echo '🔄 Applying Prisma DB schema...' && (pnpm --filter @telegram-commerce/database db:push --accept-data-loss || true) && echo '🚀 Starting API...' && node apps/api/dist/index.js"]
