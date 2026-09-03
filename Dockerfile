@@ -20,7 +20,7 @@ RUN pnpm --filter @telegram-commerce/api build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN npm install -g pnpm@11.24.0
+RUN apk add --no-cache curl && npm install -g pnpm@11.24.0
 
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
