@@ -15,6 +15,7 @@
     "fastify-raw-body": "^5.0.0",
     "@telegram-commerce/config": "workspace:*",
     "@telegram-commerce/database": "workspace:*",
+    "@telegram-commerce/i18n": "workspace:*",
     "@telegram-commerce/payments": "workspace:*",
     "@telegram-commerce/telegram-engine": "workspace:*",
     "bcryptjs": "^2.4.3",

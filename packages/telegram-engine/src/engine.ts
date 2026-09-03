@@ -27,8 +27,8 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
   // Redis or in-memory session middleware
   if (redisUrl) {
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 3, lazyConnect: true });
-    redis.connect().catch((err) => {
-      console.warn(`[Session Redis] Connection failed for tenant ${tenant.id}, falling back to memory:`, err.message);
+    redis.connect().catch((err: any) => {
+      console.warn(`[Session Redis] Connection failed for tenant ${tenant.id}, falling back to memory:`, err?.message);
     });
 
     bot.use(

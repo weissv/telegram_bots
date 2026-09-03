@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@telegram-commerce/config": "workspace:*",
+    "@telegram-commerce/i18n": "workspace:*",
     "@telegram-commerce/ui": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
