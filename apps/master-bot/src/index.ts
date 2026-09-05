@@ -30,7 +30,7 @@ export async function startMasterBotRunner(token?: string) {
           { command: 'admin', description: '👑 Superadmin Control Center' },
         ]);
 
-        if (env.PUBLIC_MINIAPP_URL) {
+        if (env.PUBLIC_MINIAPP_URL && env.PUBLIC_MINIAPP_URL.startsWith('https://')) {
           await bot.api.setChatMenuButton({
             menu_button: {
               type: 'web_app',
@@ -43,11 +43,15 @@ export async function startMasterBotRunner(token?: string) {
         console.warn('⚠️ Non-critical: Could not set bot menu commands:', err?.message);
       }
     },
+    drop_pending_updates: true,
+  }).catch((err) => {
+    console.error('⚠️ Master bot polling loop error:', err);
   });
 
   return bot;
 }
 
-if (process.env.NODE_ENV !== 'test' && !process.env.EMBEDDED_RUNNER) {
+// Only start automatically if executed as a standalone script
+if (process.env.NODE_ENV !== 'test' && process.env.RUN_STANDALONE_MASTERBOT === 'true') {
   startMasterBotRunner();
 }
