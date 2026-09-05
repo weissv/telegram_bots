@@ -3,11 +3,27 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import rawBody from 'fastify-raw-body';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { getEnv } from '@telegram-commerce/config';
 import { webhookRoutes } from './routes/webhooks.js';
 import { shopRoutes } from './routes/shop.js';
 import { adminRoutes } from './routes/admin.js';
 import { billingRoutes } from './routes/billing.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function findDistPath(appName: string): string {
+  const candidates = [
+    path.resolve(process.cwd(), `apps/${appName}/dist`),
+    path.resolve(process.cwd(), `../${appName}/dist`),
+    path.resolve(__dirname, `../../${appName}/dist`),
+  ];
+  return candidates.find((c) => fs.existsSync(c)) || candidates[0];
+}
 
 export async function createServer(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -43,13 +59,41 @@ export async function createServer(): Promise<FastifyInstance> {
     secret: env.JWT_SECRET,
   });
 
+  // Static files for Telegram Mini App & Merchant Admin
+  const miniappDist = findDistPath('miniapp');
+  const adminDist = findDistPath('admin');
+
+  if (fs.existsSync(miniappDist)) {
+    await fastify.register(fastifyStatic, {
+      root: miniappDist,
+      prefix: '/miniapp/',
+      decorateReply: false,
+    });
+    console.log(`📦 Serving Mini App from ${miniappDist} at /miniapp/`);
+  }
+
+  if (fs.existsSync(adminDist)) {
+    await fastify.register(fastifyStatic, {
+      root: adminDist,
+      prefix: '/admin/',
+      decorateReply: false,
+    });
+    console.log(`📦 Serving Admin from ${adminDist} at /admin/`);
+  }
+
   // Health Check
   fastify.get('/health', async () => {
     return {
       status: 'ok',
       mode: env.MODE,
+      master_bot: !!env.MASTER_BOT_TOKEN,
       timestamp: new Date().toISOString(),
     };
+  });
+
+  // Root redirect to Mini App storefront
+  fastify.get('/', async (req, reply) => {
+    return reply.redirect('/miniapp/?tenant_id=demo-tenant');
   });
 
   // Routes
@@ -57,6 +101,17 @@ export async function createServer(): Promise<FastifyInstance> {
   await fastify.register(shopRoutes);
   await fastify.register(adminRoutes);
   await fastify.register(billingRoutes);
+
+  // SPA fallback for frontend routes
+  fastify.setNotFoundHandler(async (req, reply) => {
+    if (req.url.startsWith('/admin') && fs.existsSync(path.join(adminDist, 'index.html'))) {
+      return reply.sendFile('index.html', adminDist);
+    }
+    if (req.url.startsWith('/miniapp') && fs.existsSync(path.join(miniappDist, 'index.html'))) {
+      return reply.sendFile('index.html', miniappDist);
+    }
+    return reply.status(404).send({ error: 'Route not found' });
+  });
 
   return fastify;
 }

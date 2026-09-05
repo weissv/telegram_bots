@@ -1,12 +1,18 @@
 import { createServer } from './server.js';
 import { getEnv } from '@telegram-commerce/config';
 import { initBillingWorker } from './services/billingWorker.js';
+import { ensureDatabaseSeeded } from './services/seedService.js';
+import { startMasterBotRunner } from '@telegram-commerce/master-bot';
 
 async function main() {
   const env = getEnv();
+
+  // 1. Ensure database has demo store and superadmin initialized
+  await ensureDatabaseSeeded();
+
   const server = await createServer();
 
-  // Initialize BullMQ worker if in SaaS mode
+  // 2. Initialize BullMQ worker if in SaaS mode
   if (env.MODE === 'saas') {
     try {
       await initBillingWorker();
@@ -16,6 +22,7 @@ async function main() {
     }
   }
 
+  // 3. Start API Server
   try {
     await server.listen({
       port: env.PORT,
@@ -25,6 +32,16 @@ async function main() {
   } catch (err) {
     server.log.error(err);
     process.exit(1);
+  }
+
+  // 4. Start Master Onboarding & Storefront Bot runner in polling mode
+  const masterToken = env.MASTER_BOT_TOKEN;
+  if (masterToken && !masterToken.includes('placeholder')) {
+    try {
+      await startMasterBotRunner(masterToken);
+    } catch (err) {
+      console.error('⚠️ Master Bot startup error:', err);
+    }
   }
 }
 

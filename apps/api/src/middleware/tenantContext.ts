@@ -22,12 +22,10 @@ export async function tenantContextMiddleware(req: FastifyRequest, reply: Fastif
   const tenantIdQuery = (req.query as any)?.tenant_id as string;
   const tenantIdParam = (req.params as any)?.tenant_id as string;
 
-  const tenantId = tenantIdHeader || tenantIdQuery || tenantIdParam;
+  let tenantId = tenantIdHeader || tenantIdQuery || tenantIdParam;
 
-  if (!tenantId) {
-    return reply.status(400).send({
-      error: 'Missing required tenant identifier (x-tenant-id header or tenant_id query/param)',
-    });
+  if (tenantId === 'demo-tenant' || !tenantId) {
+    tenantId = env.STANDALONE_TENANT_ID;
   }
 
   req.tenantId = tenantId;

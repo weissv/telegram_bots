@@ -48,15 +48,27 @@ let parsedEnv: AppEnv | null = null;
 
 export function getEnv(): AppEnv {
   if (!parsedEnv) {
-    const result = envSchema.safeParse(process.env);
+    const rawEnv = {
+      ...process.env,
+      MASTER_BOT_TOKEN: process.env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0',
+      STANDALONE_ADMIN_TELEGRAM_ID: process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731',
+      PUBLIC_MINIAPP_URL:
+        process.env.PUBLIC_MINIAPP_URL ||
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/miniapp` : 'http://localhost:5173'),
+      PUBLIC_ADMIN_URL:
+        process.env.PUBLIC_ADMIN_URL ||
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/admin` : 'http://localhost:5174'),
+    };
+
+    const result = envSchema.safeParse(rawEnv);
     if (!result.success) {
       console.error('❌ Environment validation failed:', JSON.stringify(result.error.format(), null, 2));
       // For development/test fallback with sensible defaults if missing
       parsedEnv = envSchema.parse({
-        DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/telegram_commerce',
-        ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        JWT_SECRET: process.env.JWT_SECRET || 'default-jwt-secret-key-12345678',
-        ...process.env,
+        DATABASE_URL: rawEnv.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/telegram_commerce',
+        ENCRYPTION_KEY: rawEnv.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        JWT_SECRET: rawEnv.JWT_SECRET || 'default-jwt-secret-key-12345678',
+        ...rawEnv,
       });
     } else {
       parsedEnv = result.data;

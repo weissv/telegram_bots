@@ -9,7 +9,11 @@ import { CheckoutModal } from './components/CheckoutModal.js';
 import { Product, ShopBootstrap, StoreTheme } from './types/index.js';
 import { Sparkles, Store, AlertCircle } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE =
+  import.meta.env.VITE_API_URL ??
+  (typeof window !== 'undefined' && window.location.port === '5173'
+    ? 'http://localhost:3000'
+    : '');
 
 function AppContent() {
   const { user, initData, haptic } = useTelegram();
