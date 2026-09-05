@@ -48,7 +48,7 @@ let parsedEnv: AppEnv | null = null;
 
 export function getEnv(): AppEnv {
   if (!parsedEnv) {
-    const rawEnv = {
+    const rawEnv: Record<string, any> = {
       ...process.env,
       MASTER_BOT_TOKEN: process.env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0',
       STANDALONE_ADMIN_TELEGRAM_ID: process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731',

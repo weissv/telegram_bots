@@ -3,24 +3,18 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import rawBody from 'fastify-raw-body';
 import rateLimit from '@fastify/rate-limit';
-import fastifyStatic from '@fastify/static';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { getEnv } from '@telegram-commerce/config';
 import { webhookRoutes } from './routes/webhooks.js';
 import { shopRoutes } from './routes/shop.js';
 import { adminRoutes } from './routes/admin.js';
 import { billingRoutes } from './routes/billing.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 function findDistPath(appName: string): string {
   const candidates = [
     path.resolve(process.cwd(), `apps/${appName}/dist`),
     path.resolve(process.cwd(), `../${appName}/dist`),
-    path.resolve(__dirname, `../../${appName}/dist`),
   ];
   return candidates.find((c) => fs.existsSync(c)) || candidates[0];
 }
@@ -63,22 +57,28 @@ export async function createServer(): Promise<FastifyInstance> {
   const miniappDist = findDistPath('miniapp');
   const adminDist = findDistPath('admin');
 
-  if (fs.existsSync(miniappDist)) {
-    await fastify.register(fastifyStatic, {
-      root: miniappDist,
-      prefix: '/miniapp/',
-      decorateReply: false,
-    });
-    console.log(`📦 Serving Mini App from ${miniappDist} at /miniapp/`);
-  }
+  try {
+    const fastifyStatic = ((await import('@fastify/static' as any)) as any).default;
 
-  if (fs.existsSync(adminDist)) {
-    await fastify.register(fastifyStatic, {
-      root: adminDist,
-      prefix: '/admin/',
-      decorateReply: false,
-    });
-    console.log(`📦 Serving Admin from ${adminDist} at /admin/`);
+    if (fs.existsSync(miniappDist)) {
+      await fastify.register(fastifyStatic, {
+        root: miniappDist,
+        prefix: '/miniapp/',
+        decorateReply: false,
+      });
+      console.log(`📦 Serving Mini App from ${miniappDist} at /miniapp/`);
+    }
+
+    if (fs.existsSync(adminDist)) {
+      await fastify.register(fastifyStatic, {
+        root: adminDist,
+        prefix: '/admin/',
+        decorateReply: false,
+      });
+      console.log(`📦 Serving Admin from ${adminDist} at /admin/`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Static serving plugin load notice:', err);
   }
 
   // Health Check
@@ -105,10 +105,16 @@ export async function createServer(): Promise<FastifyInstance> {
   // SPA fallback for frontend routes
   fastify.setNotFoundHandler(async (req, reply) => {
     if (req.url.startsWith('/admin') && fs.existsSync(path.join(adminDist, 'index.html'))) {
-      return reply.sendFile('index.html', adminDist);
+      if ((reply as any).sendFile) {
+        return (reply as any).sendFile('index.html', adminDist);
+      }
+      return reply.type('text/html').send(fs.readFileSync(path.join(adminDist, 'index.html'), 'utf8'));
     }
     if (req.url.startsWith('/miniapp') && fs.existsSync(path.join(miniappDist, 'index.html'))) {
-      return reply.sendFile('index.html', miniappDist);
+      if ((reply as any).sendFile) {
+        return (reply as any).sendFile('index.html', miniappDist);
+      }
+      return reply.type('text/html').send(fs.readFileSync(path.join(miniappDist, 'index.html'), 'utf8'));
     }
     return reply.status(404).send({ error: 'Route not found' });
   });

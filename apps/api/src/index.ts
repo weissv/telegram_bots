@@ -2,7 +2,6 @@ import { createServer } from './server.js';
 import { getEnv } from '@telegram-commerce/config';
 import { initBillingWorker } from './services/billingWorker.js';
 import { ensureDatabaseSeeded } from './services/seedService.js';
-import { startMasterBotRunner } from '@telegram-commerce/master-bot';
 
 async function main() {
   const env = getEnv();
@@ -38,7 +37,10 @@ async function main() {
   const masterToken = env.MASTER_BOT_TOKEN;
   if (masterToken && !masterToken.includes('placeholder')) {
     try {
-      await startMasterBotRunner(masterToken);
+      const { startMasterBotRunner } = (await import('@telegram-commerce/master-bot' as any)) as any;
+      if (typeof startMasterBotRunner === 'function') {
+        await startMasterBotRunner(masterToken);
+      }
     } catch (err) {
       console.error('⚠️ Master Bot startup error:', err);
     }

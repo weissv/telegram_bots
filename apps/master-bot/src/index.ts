@@ -1,7 +1,7 @@
 import { createMasterBot, MasterBotContext } from './bot.js';
 import { getEnv } from '@telegram-commerce/config';
 
-export { createMasterBot, MasterBotContext };
+export { createMasterBot, type MasterBotContext };
 export * from './handlers/sales.js';
 export * from './handlers/demo.js';
 export * from './conversations/onboarding.js';
