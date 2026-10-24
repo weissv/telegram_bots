@@ -7,7 +7,7 @@ import { OrdersTable } from '../components/OrdersTable.js';
 import { OrderStatusLabel, ORDER_STATUS } from '../components/Status.js';
 import { formatDate, formatMoney, shortOrderId } from '../lib/format.js';
 
-export function Orders() {
+export function Orders({ currency = 'UZS' }: { currency?: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -95,7 +95,7 @@ export function Orders() {
         ) : (
           <OrdersTable
             orders={filtered}
-            currency="USD"
+            currency={currency}
             onSelect={(order) => setSelectedOrder(order)}
           />
         )}
@@ -176,11 +176,11 @@ export function Orders() {
                       <div>
                         <div className="font-medium text-ink">{item.title}</div>
                         <div className="text-muted">
-                          {item.quantity} шт. × {formatMoney(Number(item.price), 'USD')}
+                          {item.quantity} шт. × {formatMoney(Number(item.price), currency)}
                         </div>
                       </div>
                       <div className="font-medium">
-                        {formatMoney(Number(item.price) * item.quantity, 'USD')}
+                        {formatMoney(Number(item.price) * item.quantity, currency)}
                       </div>
                     </div>
                   ))
@@ -189,7 +189,7 @@ export function Orders() {
                 )}
                 <div className="p-3 bg-subtle/50 flex items-center justify-between text-xs font-semibold">
                   <span>Итого к оплате:</span>
-                  <span className="text-sm">{formatMoney(Number(selectedOrder.total_amount), 'USD')}</span>
+                  <span className="text-sm">{formatMoney(Number(selectedOrder.total_amount), currency)}</span>
                 </div>
               </div>
             </div>

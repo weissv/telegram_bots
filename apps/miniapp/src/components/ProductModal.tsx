@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Check } from 'lucide-react';
+import { X, Plus, Minus } from 'lucide-react';
 import { Product } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -22,7 +22,7 @@ export function ProductModal({
   onAddToCart,
   onHaptic,
 }: ProductModalProps) {
-  const { formatCurrency } = useI18n();
+  const { t, formatCurrency } = useI18n();
   const [qty, setQty] = useState(1);
 
   useEffect(() => {
@@ -36,9 +36,13 @@ export function ProductModal({
   const isOutOfStock = product.stock <= 0;
   const image =
     product.images?.[0] ||
-    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+    'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80';
   const unitPrice = Number(product.price);
   const totalPrice = unitPrice * qty;
+
+  const categoryTranslated = product.category
+    ? t(`category.${product.category.toLowerCase()}`) || product.category
+    : '';
 
   const handleIncrement = () => {
     if (qty < product.stock) {
@@ -73,7 +77,7 @@ export function ProductModal({
             type="button"
             onClick={onClose}
             className="absolute right-3 top-2.5 p-1.5 rounded-full text-[var(--c-hint)] hover:text-[var(--c-text)]"
-            aria-label="Закрыть"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -90,20 +94,20 @@ export function ProductModal({
             />
             {isOutOfStock ? (
               <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold">
-                Нет в наличии
+                {t('product.out_of_stock')}
               </span>
             ) : product.stock <= 5 ? (
               <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-amber-500 text-black text-xs font-semibold">
-                Осталось {product.stock} шт.
+                {t('product.low_stock', { count: product.stock })}
               </span>
             ) : null}
           </div>
 
           {/* Title & Price */}
           <div className="space-y-1">
-            {product.category && (
+            {categoryTranslated && (
               <span className="text-xs font-medium text-[var(--c-hint)] uppercase tracking-wide">
-                {product.category}
+                {categoryTranslated}
               </span>
             )}
             <h2 className="text-lg font-semibold text-[var(--c-text)] leading-snug">
@@ -124,13 +128,15 @@ export function ProductModal({
           {/* Quantity Selector */}
           {!isOutOfStock && (
             <div className="flex items-center justify-between py-2 border-t border-[var(--c-separator)]">
-              <span className="text-sm font-medium text-[var(--c-text)]">Количество:</span>
+              <span className="text-sm font-medium text-[var(--c-text)]">
+                {t('product.quantity')}
+              </span>
               <div className="stepper !h-10 !w-32">
                 <button
                   type="button"
                   disabled={qty <= 1}
                   onClick={handleDecrement}
-                  aria-label="Уменьшить"
+                  aria-label="-"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -139,7 +145,7 @@ export function ProductModal({
                   type="button"
                   disabled={qty >= product.stock}
                   onClick={handleIncrement}
-                  aria-label="Увеличить"
+                  aria-label="+"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -157,9 +163,9 @@ export function ProductModal({
             className="btn-filled"
           >
             {isOutOfStock ? (
-              'Товар распродан'
+              t('product.sold_out')
             ) : (
-              <span>Добавить в корзину · {formatCurrency(totalPrice, currency)}</span>
+              <span>{t('product.add_btn', { price: formatCurrency(totalPrice, currency) })}</span>
             )}
           </button>
         </div>

@@ -10,7 +10,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('demo_merchant@telegram-commerce.local');
   const [password, setPassword] = useState('password123');
-  const [storeName, setStoreName] = useState('Apex Streetwear');
+  const [storeName, setStoreName] = useState('MODA Tashkent');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -28,8 +28,8 @@ export function Header({
   const { t } = useI18n();
 
   const toggleLocale = () => {
-    if (locale === 'ru') onLocaleChange('en');
-    else if (locale === 'en') onLocaleChange('uz');
+    if (locale === 'ru') onLocaleChange('uz');
+    else if (locale === 'uz') onLocaleChange('en');
     else onLocaleChange('ru');
   };
 
@@ -46,12 +46,12 @@ export function Header({
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-[var(--c-brand)] text-[var(--c-brand-text)] flex items-center justify-center font-bold text-xs shrink-0">
-              {(theme.storeName || 'S')[0]?.toUpperCase()}
+              {(theme.storeName || 'M')[0]?.toUpperCase()}
             </div>
           )}
           <div className="min-w-0">
             <h1 className="text-sm font-semibold text-[var(--c-text)] truncate leading-tight">
-              {theme.storeName || 'Каталог товаров'}
+              {theme.storeName || t('header.default_title')}
             </h1>
             {telegramUser && (
               <p className="text-[11px] text-[var(--c-hint)] truncate">
@@ -68,7 +68,7 @@ export function Header({
             type="button"
             onClick={toggleLocale}
             className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-[var(--c-secondary)] text-[var(--c-text)] text-xs font-medium"
-            aria-label="Сменить язык"
+            aria-label={t('header.switch_language')}
           >
             <Globe className="w-3 h-3 text-[var(--c-hint)]" />
             <span>{locale.toUpperCase()}</span>
@@ -76,13 +76,13 @@ export function Header({
         </div>
       </div>
 
-      {/* Native-style Telegram Search */}
+      {/* Search Bar */}
       <div className="mt-2.5">
         <div className="search">
           <Search className="w-4 h-4 text-[var(--c-hint)] shrink-0" />
           <input
             type="text"
-            placeholder={t('miniapp.search_placeholder') || 'Поиск товаров...'}
+            placeholder={t('miniapp.search_placeholder')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />

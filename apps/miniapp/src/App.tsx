@@ -69,7 +69,6 @@ function AppContent() {
         setBootstrap(data);
         setProducts(data.featuredProducts || []);
 
-        // Optional theme customization from tenant settings
         if (data.theme?.primaryColor) {
           document.documentElement.style.setProperty('--c-brand', data.theme.primaryColor);
         }
@@ -85,8 +84,8 @@ function AppContent() {
   }, [tenantId]);
 
   const theme: StoreTheme = bootstrap?.theme || {
-    storeName: 'Mirai Shop',
-    currency: 'USD',
+    storeName: 'MODA Tashkent',
+    currency: 'UZS',
   };
 
   // Telegram BackButton management
@@ -128,7 +127,9 @@ function AppContent() {
 
     if (isCartOpen) {
       if (items.length > 0) {
-        const btnText = `Оформить заказ · ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
+        const btnText = t('cart.main_btn_checkout', {
+          amount: formatCurrency(totalAmount, theme.currency || 'UZS'),
+        });
         mainButton.setText(btnText);
         mainButton.show();
 
@@ -147,7 +148,10 @@ function AppContent() {
     }
 
     if (items.length > 0) {
-      const btnText = `Корзина (${totalCount}) · ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
+      const btnText = t('cart.main_btn_cart', {
+        count: totalCount,
+        amount: formatCurrency(totalAmount, theme.currency || 'UZS'),
+      });
       mainButton.setText(btnText);
       mainButton.show();
 
@@ -172,6 +176,7 @@ function AppContent() {
     mainButton,
     theme.currency,
     formatCurrency,
+    t,
     haptic,
   ]);
 
@@ -190,7 +195,7 @@ function AppContent() {
   const handleAddToCart = (product: Product, quantity = 1) => {
     haptic.impact('medium');
     addItem(product, quantity);
-    showToast(`Товар добавлен в корзину`);
+    showToast(t('product.added_toast'));
   };
 
   const handleProceedCheckout = () => {
@@ -262,7 +267,7 @@ function AppContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] p-6 space-y-4">
         <div className="w-8 h-8 rounded-full border-2 border-[var(--c-brand)] border-t-transparent animate-spin" />
-        <p className="text-xs text-[var(--c-hint)]">{t('miniapp.loading') || 'Загрузка магазина…'}</p>
+        <p className="text-xs text-[var(--c-hint)]">{t('miniapp.loading')}</p>
       </div>
     );
   }
@@ -271,7 +276,7 @@ function AppContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] p-6 text-center space-y-3">
         <AlertCircle className="w-10 h-10 text-[var(--c-destructive)]" />
-        <h2 className="text-base font-semibold">{t('miniapp.error_title') || 'Магазин недоступен'}</h2>
+        <h2 className="text-base font-semibold">{t('miniapp.error_title')}</h2>
         <p className="text-xs text-[var(--c-hint)] max-w-xs">{error}</p>
       </div>
     );
@@ -279,9 +284,12 @@ function AppContent() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] select-none overflow-x-hidden"
+      className="w-full bg-[var(--c-bg)] text-[var(--c-text)] select-none"
       style={{
-        paddingBottom: items.length > 0 && !isInsideTelegram ? 'calc(76px + var(--safe-bottom))' : 'calc(24px + var(--safe-bottom))',
+        paddingBottom:
+          items.length > 0 && !isInsideTelegram
+            ? 'calc(76px + var(--safe-bottom))'
+            : 'calc(24px + var(--safe-bottom))',
       }}
     >
       {/* Toast Alert */}
@@ -326,20 +334,27 @@ function AppContent() {
       {/* Category Chips Bar */}
       {bootstrap?.categories && bootstrap.categories.length > 0 && (
         <div className="px-4 mt-3 overflow-x-auto no-scrollbar flex items-center gap-1.5 pb-1">
-          {bootstrap.categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              aria-pressed={selectedCategory === cat}
-              onClick={() => {
-                haptic.selection();
-                setSelectedCategory(cat);
-              }}
-              className="chip"
-            >
-              {cat}
-            </button>
-          ))}
+          {bootstrap.categories.map((cat) => {
+            const catLabel =
+              cat === 'All'
+                ? t('category.all')
+                : t(`category.${cat.toLowerCase()}`) || cat;
+
+            return (
+              <button
+                key={cat}
+                type="button"
+                aria-pressed={selectedCategory === cat}
+                onClick={() => {
+                  haptic.selection();
+                  setSelectedCategory(cat);
+                }}
+                className="chip"
+              >
+                {catLabel}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -347,18 +362,20 @@ function AppContent() {
       <main className="px-4 mt-4">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-sm font-semibold text-[var(--c-text)]">
-            {selectedCategory === 'All' ? 'Все товары' : selectedCategory}
+            {selectedCategory === 'All'
+              ? t('category.all')
+              : t(`category.${selectedCategory.toLowerCase()}`) || selectedCategory}
           </h2>
           <span className="text-xs text-[var(--c-hint)]">
-            {filteredProducts.length} шт.
+            {t('miniapp.items_count', { count: filteredProducts.length })}
           </span>
         </div>
 
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16 rounded-xl bg-[var(--c-secondary)] p-6 space-y-2">
             <Store className="w-8 h-8 text-[var(--c-hint)] mx-auto opacity-50" />
-            <p className="text-sm font-medium">{t('miniapp.no_products') || 'Товары не найдены'}</p>
-            <p className="text-xs text-[var(--c-hint)]">Попробуйте изменить категорию или поисковый запрос.</p>
+            <p className="text-sm font-medium">{t('miniapp.no_products')}</p>
+            <p className="text-xs text-[var(--c-hint)]">{t('miniapp.no_products_hint')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
@@ -368,7 +385,7 @@ function AppContent() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  currency={theme.currency || 'USD'}
+                  currency={theme.currency || 'UZS'}
                   inCartQty={inCart}
                   onAddToCart={(p) => handleAddToCart(p, 1)}
                   onUpdateQty={updateQuantity}
@@ -396,10 +413,10 @@ function AppContent() {
           >
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" />
-              <span>Корзина ({totalCount})</span>
+              <span>{t('cart.drawer_title')} ({totalCount})</span>
             </div>
             <span className="tabular font-semibold">
-              {formatCurrency(totalAmount, theme.currency || 'USD')}
+              {formatCurrency(totalAmount, theme.currency || 'UZS')}
             </span>
           </button>
         </div>
@@ -408,7 +425,7 @@ function AppContent() {
       {/* Product Quick View Sheet */}
       <ProductModal
         product={selectedProduct}
-        currency={theme.currency || 'USD'}
+        currency={theme.currency || 'UZS'}
         inCartQty={
           selectedProduct
             ? items.find((i) => i.product.id === selectedProduct.id)?.quantity || 0
@@ -425,7 +442,7 @@ function AppContent() {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         items={items}
-        currency={theme.currency || 'USD'}
+        currency={theme.currency || 'UZS'}
         totalAmount={totalAmount}
         onUpdateQty={updateQuantity}
         onRemoveItem={removeItem}
@@ -439,7 +456,7 @@ function AppContent() {
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
         items={items}
-        currency={theme.currency || 'USD'}
+        currency={theme.currency || 'UZS'}
         totalAmount={totalAmount}
         initialTelegramUser={user}
         onConfirmOrder={handleConfirmOrder}
@@ -451,7 +468,7 @@ function AppContent() {
         isOpen={Boolean(orderSuccess)}
         orderId={orderSuccess?.orderId || null}
         totalAmount={orderSuccess?.totalAmount || 0}
-        currency={theme.currency || 'USD'}
+        currency={theme.currency || 'UZS'}
         itemsCount={orderSuccess?.itemsCount || 0}
         onClose={() => setOrderSuccess(null)}
         onCloseMiniApp={close}

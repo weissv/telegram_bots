@@ -5,6 +5,12 @@ import { getEnv, isHttpsUrl, isSafeTelegramUrl } from '@telegram-commerce/config
 import { handleSales } from './handlers/sales.js';
 import { handleDemo } from './handlers/demo.js';
 import { onboardingConversation } from './conversations/onboarding.js';
+import {
+  handleChatBotDemoCatalog,
+  handleChatBotDemoAddToCart,
+  handleChatBotDemoViewCart,
+  handleChatBotDemoCheckout,
+} from './handlers/chatBotDemo.js';
 
 export type MasterBotContext = ConversationFlavor<Context & SessionFlavor<Record<string, any>>>;
 
@@ -15,8 +21,37 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   bot.use(conversations());
   bot.use(createConversation(onboardingConversation as any, 'onboardingConversation'));
 
-  bot.command('start', handleSales);
-  bot.command('demo', handleDemo);
+  // Start command always resets any stuck conversation and shows the main sales/demo menu
+  bot.command('start', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await handleSales(ctx);
+  });
+
+  bot.command('cancel', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await ctx.reply('❌ <b>Действие отменено.</b>\n\nВведите /start для возврата в главное меню.', {
+      parse_mode: 'HTML',
+    });
+  });
+
+  bot.command('demo', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await handleDemo(ctx);
+  });
+
+  bot.command('botdemo', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await handleChatBotDemoCatalog(ctx, 0);
+  });
+
   bot.command('newstore', async (ctx) => {
     await ctx.conversation.enter('onboardingConversation');
   });
@@ -35,12 +70,12 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 
     keyboard
       .row()
-      .text('🛍️ Товары в чате', 'demo:products')
+      .text('🤖 Демо обычного бота в чате', 'chatdemo:catalog')
       .row()
       .text('⚡ Запустить свой магазин', 'onboard:start');
 
     await ctx.reply(
-      `🛍️ <b>Mirai Shop • Telegram Commerce</b>\n\n` +
+      `🛍️ <b>MODA Tashkent • Telegram Commerce</b>\n\n` +
       `Откройте витрину интернет-магазина в один клик. Полноэкранный Telegram Mini App, каталог, быстрый поиск и моментальный чекаут!\n\n` +
       `👇 Нажмите кнопку ниже для запуска витрины:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
@@ -49,21 +84,7 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 
   // Cart command
   bot.command('cart', async (ctx) => {
-    const env = getEnv();
-    const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
-    const keyboard = new InlineKeyboard();
-    if (isHttpsUrl(miniappUrl)) {
-      keyboard.webApp('🛒 Открыть корзину в Mini App', miniappUrl);
-    } else if (isSafeTelegramUrl(miniappUrl)) {
-      keyboard.url('🛒 Открыть корзину в Mini App', miniappUrl);
-    }
-
-    await ctx.reply(
-      `🛒 <b>Ваша корзина</b>\n\n` +
-      `Управляйте выбранными товарами, изменяйте количество и оформляйте заказ в Telegram Mini App.\n\n` +
-      `👇 Нажмите кнопку ниже, чтобы открыть корзину:`,
-      { parse_mode: 'HTML', reply_markup: keyboard }
-    );
+    await handleChatBotDemoViewCart(ctx);
   });
 
   // Orders inquiry
@@ -81,8 +102,9 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
         const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
         const keyboard = new InlineKeyboard();
         if (isHttpsUrl(miniappUrl)) {
-          keyboard.webApp('🛍️ Открыть каталог', miniappUrl);
+          keyboard.webApp('🛍️ Открыть каталог (Mini App)', miniappUrl);
         }
+        keyboard.row().text('🤖 Каталог в чате', 'chatdemo:catalog');
 
         await ctx.reply(
           `📦 <b>История заказов</b>\n\nУ вас пока нет оформленных заказов. Перейдите в каталог, чтобы сделать свой первый заказ!`,
@@ -93,8 +115,15 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 
       let text = `📦 <b>Ваши последние заказы:</b>\n\n`;
       for (const ord of orders) {
-        const statusEmoji = ord.status === 'PAID' ? '✅ Оплачен' : ord.status === 'PENDING' ? '⏳ Ожидает оплаты' : '❌ Отменен';
-        text += `• <b>Заказ #${ord.id.slice(0, 8)}</b> — $${Number(ord.total_amount).toFixed(2)}\n  Статус: ${statusEmoji}\n  Дата: ${new Date(ord.createdAt).toLocaleDateString()}\n\n`;
+        const statusEmoji =
+          ord.status === 'PAID'
+            ? '✅ Оплачен'
+            : ord.status === 'PENDING'
+            ? '⏳ Ожидает оплаты'
+            : ord.status === 'DELIVERED'
+            ? '🚚 Доставлен'
+            : '❌ Отменен';
+        text += `• <b>Заказ #${ord.id.slice(0, 8)}</b> — ${new Intl.NumberFormat('ru-RU').format(Number(ord.total_amount))} сум\n  Статус: ${statusEmoji}\n  Дата: ${new Date(ord.createdAt).toLocaleDateString()}\n\n`;
       }
 
       await ctx.reply(text, { parse_mode: 'HTML' });
@@ -106,13 +135,13 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   // Help command
   bot.command('help', async (ctx) => {
     await ctx.reply(
-      `ℹ️ <b>Навигация по Mirai Shop</b>\n\n` +
-      `• /start — Главное меню и информация о магазине\n` +
-      `• /catalog — Полноэкранный Telegram Mini App с каталогом\n` +
+      `ℹ️ <b>Навигация по платформе</b>\n\n` +
+      `• /start — Главное меню и выбор демо-версий\n` +
+      `• /catalog — Полноэкранный Telegram Mini App\n` +
+      `• /botdemo — Демо обычного бота с покупками прямо в чате\n` +
       `• /cart — Корзина и оформление заказа\n` +
       `• /orders — История и статусы ваших заказов\n` +
-      `• /demo — Интерактивное демо и витрина для бизнеса\n` +
-      `• /newstore — Мастер создания собственного магазина\n\n` +
+      `• /newstore — Создать свой магазин за 2 минуты\n\n` +
       `💬 По вопросам поддержки: обратитесь к администратору магазина.`,
       { parse_mode: 'HTML' }
     );
@@ -128,10 +157,10 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     const keyboard = new InlineKeyboard()
       .text('🇷🇺 Русский (Основной)', 'lang:ru')
       .row()
-      .text('🇬🇧 English', 'lang:en')
-      .text("🇺🇿 O'zbekcha", 'lang:uz');
+      .text("🇺🇿 O'zbekcha", 'lang:uz')
+      .text('🇬🇧 English', 'lang:en');
 
-    await ctx.reply('🌐 <b>Выберите язык интерфейса / Select language:</b>', {
+    await ctx.reply('🌐 <b>Выберите язык интерфейса / Tilni tanlang / Select language:</b>', {
       parse_mode: 'HTML',
       reply_markup: keyboard,
     });
@@ -143,10 +172,10 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     const keyboard = new InlineKeyboard()
       .text('🇷🇺 Русский (Основной)', 'lang:ru')
       .row()
-      .text('🇬🇧 English', 'lang:en')
-      .text("🇺🇿 O'zbekcha", 'lang:uz');
+      .text("🇺🇿 O'zbekcha", 'lang:uz')
+      .text('🇬🇧 English', 'lang:en');
 
-    await ctx.reply('🌐 <b>Выберите язык интерфейса / Select language:</b>', {
+    await ctx.reply('🌐 <b>Выберите язык интерфейса / Tilni tanlang:</b>', {
       parse_mode: 'HTML',
       reply_markup: keyboard,
     });
@@ -158,15 +187,15 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     const msg =
       chosen === 'ru'
         ? '✅ Язык установлен: Русский 🇷🇺'
-        : chosen === 'en'
-        ? '✅ Language set: English 🇬🇧'
-        : "✅ Til tanlandi: O'zbekcha 🇺🇿";
+        : chosen === 'uz'
+        ? "✅ Til tanlandi: O'zbekcha 🇺🇿"
+        : '✅ Language set: English 🇬🇧';
     await ctx.answerCallbackQuery({ text: msg });
     await ctx.reply(msg);
     await handleSales(ctx);
   });
 
-  // Callbacks
+  // Callbacks for Main Navigation
   bot.callbackQuery('demo:view', async (ctx) => {
     await ctx.answerCallbackQuery();
     await handleDemo(ctx);
@@ -177,48 +206,53 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     await ctx.conversation.enter('onboardingConversation');
   });
 
+  bot.callbackQuery('onboard:cancel', async (ctx) => {
+    await ctx.answerCallbackQuery({ text: 'Создание магазина отменено' });
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await handleSales(ctx);
+  });
+
   bot.callbackQuery('admin:refresh', async (ctx) => {
     await ctx.answerCallbackQuery({ text: '🔄 Метрики обновлены' });
     await sendAdminDashboard(ctx, true);
   });
 
-  bot.callbackQuery('demo:products', async (ctx) => {
+  // --- Interactive Chat Bot Demo Handlers ---
+  bot.callbackQuery('chatdemo:catalog', async (ctx) => {
     await ctx.answerCallbackQuery();
-    const env = getEnv();
-    const demoTenantId = env.STANDALONE_TENANT_ID || '00000000-0000-0000-0000-000000000001';
+    await handleChatBotDemoCatalog(ctx, 0, false);
+  });
 
-    try {
-      const products = await prisma.product.findMany({
-        where: { tenant_id: demoTenantId, is_active: true },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-      });
+  bot.callbackQuery(/^chatdemo:nav:(\d+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const page = parseInt(ctx.match[1], 10);
+    await handleChatBotDemoCatalog(ctx, page, true);
+  });
 
-      if (products.length === 0) {
-        await ctx.reply('В демо-каталоге пока нет доступных товаров.');
-        return;
-      }
+  bot.callbackQuery(/^chatdemo:add:(.+)$/, async (ctx) => {
+    const productId = ctx.match[1];
+    await handleChatBotDemoAddToCart(ctx, productId);
+  });
 
-      let text = '📦 <b>Популярные товары каталога:</b>\n\n';
-      for (const p of products) {
-        text += `• <b>${p.title}</b> — $${Number(p.price).toFixed(2)}\n<i>${p.description || ''}</i>\n\n`;
-      }
+  bot.callbackQuery('chatdemo:cart', async (ctx) => {
+    await handleChatBotDemoViewCart(ctx);
+  });
 
-      const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
-      const keyboard = new InlineKeyboard();
+  bot.callbackQuery('chatdemo:clear', async (ctx) => {
+    (ctx.session as any).chatDemoCart = [];
+    await ctx.answerCallbackQuery({ text: '🗑️ Корзина очищена' });
+    await handleChatBotDemoViewCart(ctx);
+  });
 
-      if (isHttpsUrl(miniappUrl)) {
-        keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
-      } else if (isSafeTelegramUrl(miniappUrl)) {
-        keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
-      } else {
-        keyboard.text('⚡ Запустить свой магазин', 'onboard:start');
-      }
+  bot.callbackQuery('chatdemo:checkout', async (ctx) => {
+    await handleChatBotDemoCheckout(ctx);
+  });
 
-      await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
-    } catch (err: any) {
-      await ctx.reply(`⚠️ Ошибка загрузки товаров: ${err?.message}`);
-    }
+  bot.callbackQuery('chatdemo:menu', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await handleSales(ctx);
   });
 
   bot.catch((err) => {
@@ -248,36 +282,25 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
     ]);
 
     const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
-    const keyboard = new InlineKeyboard();
-
-    if (isSafeTelegramUrl(env.PUBLIC_ADMIN_URL)) {
-      keyboard.url('💼 Панель управления магазином', env.PUBLIC_ADMIN_URL);
-    }
-
-    keyboard.row().text('🔄 Обновить показатели', 'admin:refresh');
+    const keyboard = new InlineKeyboard()
+      .text('🔄 Обновить метрики', 'admin:refresh')
+      .row();
 
     if (isHttpsUrl(miniappUrl)) {
       keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
-    } else if (isSafeTelegramUrl(miniappUrl)) {
-      keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
     }
 
     const text = `
-👑 <b>Центр управления платформой (Суперадмин)</b>
+👑 <b>Mirai Commerce • Главная панель владельца</b>
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>Общая статистика:</b>
+ • Всего магазинов: <b>${tenantsCount}</b>
+ • Всего товаров: <b>${productsCount}</b>
+ • Всего заказов: <b>${ordersCount}</b>
 
-👤 <b>ID администратора:</b> <code>${userId}</code>
-🌐 <b>Статус системы:</b> 🟢 Все службы активны и работают в штатном режиме
-
-📊 <b>Текущие показатели платформы:</b>
-• Активных магазинов (клиентов): <b>${tenantsCount}</b>
-• Товаров в каталоге: <b>${productsCount}</b>
-• Обработано заказов: <b>${ordersCount}</b>
-
-🔑 <b>Реквизиты входа в панель управления:</b>
-• <b>URL:</b> ${env.PUBLIC_ADMIN_URL}
-• <b>Email:</b> <code>demo_merchant@telegram-commerce.local</code>
-• <b>Пароль:</b> <code>password123</code>
-    `.trim();
+💼 <b>Панель управления:</b> ${env.PUBLIC_ADMIN_URL}
+🌐 <b>Витрина Mini App:</b> ${miniappUrl}
+`.trim();
 
     if (isEdit && ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
@@ -285,6 +308,6 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     }
   } catch (err: any) {
-    await ctx.reply(`⚠️ Ошибка загрузки показателей: ${err?.message}`);
+    await ctx.reply(`⚠️ Ошибка загрузки панели: ${err?.message}`);
   }
 }

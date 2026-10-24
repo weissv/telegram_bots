@@ -22,19 +22,14 @@ const STORAGE_KEY = 'tc_locale';
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    // 1. Check localStorage
+    // 1. Check localStorage if user previously selected
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && SUPPORTED_LOCALES.includes(stored as Locale)) {
       return stored as Locale;
     }
 
-    // 2. Check Telegram WebApp language_code
-    const tgLang = (window as any)?.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
-    if (tgLang) {
-      return detectLocale(tgLang);
-    }
-
-    return DEFAULT_LOCALE;
+    // Default is strictly Russian
+    return 'ru';
   });
 
   const setLocale = useCallback((newLocale: Locale) => {

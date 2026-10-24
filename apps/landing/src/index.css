@@ -4,75 +4,27 @@
 
 @layer base {
   html {
-    background-color: #fbfaf7;
-    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    background-color: #07090e;
+    color: #f1f5f9;
   }
 
   body {
-    @apply bg-paper font-sans text-ink antialiased;
-    font-size: 1.0625rem;
-    line-height: 1.6;
-  }
-
-  @media (min-width: 640px) {
-    body {
-      font-size: 1.125rem;
-    }
-  }
-
-  h1,
-  h2,
-  h3 {
-    @apply font-serif font-semibold text-ink;
-    letter-spacing: -0.02em;
+    background-color: #07090e;
+    color: #cbd5e1;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
   ::selection {
-    background-color: #17171a;
-    color: #fbfaf7;
-  }
-
-  :focus-visible {
-    outline: 2px solid #1a6fd4;
-    outline-offset: 3px;
-    border-radius: 2px;
+    background-color: #2563eb;
+    color: #ffffff;
   }
 }
 
-@layer components {
-  .link {
-    @apply underline decoration-line underline-offset-4 transition-colors duration-150 hover:text-accent hover:decoration-accent;
-    text-decoration-thickness: 1px;
-  }
-
-  .btn-primary {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-[6px] bg-ink px-6 text-base font-medium text-paper transition-colors duration-150 hover:bg-[#3a3a40];
-  }
-
-  .tap {
-    @apply inline-flex min-h-[44px] items-center;
-  }
-
-  .money {
+@layer utilities {
+  .tabular {
     font-variant-numeric: tabular-nums;
-  }
-
-  details > summary {
-    list-style: none;
-  }
-  details > summary::-webkit-details-marker {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
   }
 }

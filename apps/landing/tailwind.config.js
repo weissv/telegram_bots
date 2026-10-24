@@ -4,26 +4,29 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: '#fbfaf7',
-        ink: '#17171a',
-        muted: '#66665f',
-        line: '#e4e2db',
-        accent: '#1a6fd4',
+        dark: {
+          950: '#07090e',
+          900: '#0b0f17',
+          850: '#101622',
+          800: '#161f30',
+          700: '#212d45',
+        },
+        brand: {
+          DEFAULT: '#2563eb',
+          light: '#38bdf8',
+          dark: '#1d4ed8',
+        },
       },
       fontFamily: {
-        serif: ['"Iowan Old Style"', '"Palatino Linotype"', 'Palatino', 'Georgia', 'serif'],
         sans: [
+          'Inter',
           'system-ui',
           '-apple-system',
+          'BlinkMacSystemFont',
           '"Segoe UI"',
           'Roboto',
-          '"Helvetica Neue"',
-          'Arial',
           'sans-serif',
         ],
-      },
-      maxWidth: {
-        page: '880px',
       },
     },
   },

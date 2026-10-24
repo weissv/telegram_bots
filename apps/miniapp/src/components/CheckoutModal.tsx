@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, CreditCard, Star, Check } from 'lucide-react';
+import { X, CreditCard, Star } from 'lucide-react';
 import { CartItem } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -29,7 +29,7 @@ export function CheckoutModal({
   onConfirmOrder,
   isProcessing,
 }: CheckoutModalProps) {
-  const { formatCurrency } = useI18n();
+  const { t, formatCurrency } = useI18n();
 
   const [customerName, setCustomerName] = useState(() => {
     if (initialTelegramUser) {
@@ -68,7 +68,7 @@ export function CheckoutModal({
           </div>
           <div className="flex items-center justify-between px-4 pb-3">
             <h2 className="text-base font-semibold text-[var(--c-text)]">
-              Оформление заказа
+              {t('checkout.heading')}
             </h2>
             <button
               type="button"
@@ -87,8 +87,10 @@ export function CheckoutModal({
           {/* Order Summary Strip */}
           <div className="p-3.5 rounded-xl bg-[var(--c-secondary)] flex items-center justify-between text-sm">
             <div>
-              <span className="font-medium text-[var(--c-text)]">Товары ({items.length}):</span>
-              <span className="text-xs text-[var(--c-hint)] block">
+              <span className="font-medium text-[var(--c-text)]">
+                {t('cart.drawer_title')} ({items.length}):
+              </span>
+              <span className="text-xs text-[var(--c-hint)] block mt-0.5">
                 {items.map((i) => `${i.product.title} (×${i.quantity})`).join(', ')}
               </span>
             </div>
@@ -100,41 +102,47 @@ export function CheckoutModal({
           {/* Contact Details */}
           <div className="space-y-3">
             <div className="text-xs font-semibold text-[var(--c-hint)] uppercase tracking-wide">
-              Данные покупателя
+              {t('checkout.customer_data')}
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--c-hint)] block">Имя и фамилия</label>
+              <label className="text-xs text-[var(--c-hint)] block">
+                {t('checkout.full_name')}
+              </label>
               <input
                 type="text"
                 required
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Иван Иванов"
+                placeholder="Aziz Rahimov"
                 className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--c-hint)] block">Контактный телефон</label>
+              <label className="text-xs text-[var(--c-hint)] block">
+                {t('checkout.phone')}
+              </label>
               <input
                 type="tel"
                 required
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="+7 (999) 000-00-00"
+                placeholder={t('checkout.phone_placeholder')}
                 className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-[var(--c-hint)] block">Адрес или комментарий к доставке</label>
+              <label className="text-xs text-[var(--c-hint)] block">
+                {t('checkout.address')}
+              </label>
               <input
                 type="text"
                 required
                 value={shippingAddress}
                 onChange={(e) => setShippingAddress(e.target.value)}
-                placeholder="Город, улица, дом, квартира"
+                placeholder={t('checkout.address_placeholder')}
                 className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
               />
             </div>
@@ -143,7 +151,7 @@ export function CheckoutModal({
           {/* Payment Methods */}
           <div className="space-y-2 pt-2">
             <div className="text-xs font-semibold text-[var(--c-hint)] uppercase tracking-wide">
-              Способ оплаты
+              {t('checkout.payment_method')}
             </div>
 
             <div className="space-y-1.5">
@@ -163,9 +171,11 @@ export function CheckoutModal({
                   </div>
                   <div>
                     <div className="text-sm font-medium text-[var(--c-text)]">
-                      Быстрая демо-оплата (Тест)
+                      {t('checkout.pay_mock_title')}
                     </div>
-                    <div className="text-xs text-[var(--c-hint)]">Мгновенное подтверждение без списания</div>
+                    <div className="text-xs text-[var(--c-hint)]">
+                      {t('checkout.pay_mock_desc')}
+                    </div>
                   </div>
                 </div>
               </label>
@@ -186,10 +196,12 @@ export function CheckoutModal({
                   </div>
                   <div>
                     <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1">
-                      <span>Telegram Stars</span>
+                      <span>{t('checkout.pay_stars_title')}</span>
                       <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                     </div>
-                    <div className="text-xs text-[var(--c-hint)]">Оплата звездами Telegram внутри приложения</div>
+                    <div className="text-xs text-[var(--c-hint)]">
+                      {t('checkout.pay_stars_desc')}
+                    </div>
                   </div>
                 </div>
               </label>
@@ -211,9 +223,11 @@ export function CheckoutModal({
                   <div>
                     <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5 text-[var(--c-hint)]" />
-                      <span>Банковская карта (Stripe)</span>
+                      <span>{t('checkout.pay_stripe_title')}</span>
                     </div>
-                    <div className="text-xs text-[var(--c-hint)]">Visa, Mastercard, MIR</div>
+                    <div className="text-xs text-[var(--c-hint)]">
+                      {t('checkout.pay_stripe_desc')}
+                    </div>
                   </div>
                 </div>
               </label>
@@ -231,9 +245,9 @@ export function CheckoutModal({
               className="btn-filled"
             >
               {isProcessing ? (
-                'Обработка заказа…'
+                t('checkout.processing_btn')
               ) : (
-                <span>Оплатить заказ · {formatCurrency(totalAmount, currency)}</span>
+                <span>{t('checkout.pay_button', { amount: formatCurrency(totalAmount, currency) })}</span>
               )}
             </button>
           </div>

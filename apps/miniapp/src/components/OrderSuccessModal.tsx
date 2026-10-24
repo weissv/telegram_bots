@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, CheckCircle2 } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useI18n } from '../i18n/useI18n.js';
 
 interface OrderSuccessModalProps {
@@ -21,7 +21,7 @@ export function OrderSuccessModal({
   onClose,
   onCloseMiniApp,
 }: OrderSuccessModalProps) {
-  const { formatCurrency } = useI18n();
+  const { t, formatCurrency } = useI18n();
 
   if (!isOpen) return null;
 
@@ -36,14 +36,14 @@ export function OrderSuccessModal({
         {/* Text Details */}
         <div className="space-y-1.5">
           <h2 className="text-xl font-bold text-[var(--c-text)]">
-            Заказ оплачен!
+            {t('success.heading')}
           </h2>
           <p className="text-sm text-[var(--c-hint)]">
-            Мы уже начали готовить ваш заказ к отправке.
+            {t('success.subtitle')}
           </p>
           {orderId && (
             <p className="text-xs font-mono text-[var(--c-hint)] pt-1">
-              Номер: #{orderId.slice(0, 8).toUpperCase()}
+              {t('success.order_num', { id: orderId.slice(0, 8).toUpperCase() })}
             </p>
           )}
         </div>
@@ -51,18 +51,18 @@ export function OrderSuccessModal({
         {/* Receipt Box */}
         <div className="p-3.5 rounded-xl bg-[var(--c-secondary)] text-left space-y-2 text-xs">
           <div className="flex items-center justify-between text-[var(--c-hint)]">
-            <span>Позиций в заказе:</span>
-            <span className="font-medium text-[var(--c-text)]">{itemsCount} шт.</span>
+            <span>{t('success.items_qty')}</span>
+            <span className="font-medium text-[var(--c-text)]">{itemsCount} {t('cart.items_suffix')}</span>
           </div>
           <div className="flex items-center justify-between text-[var(--c-hint)]">
-            <span>Сумма оплаты:</span>
+            <span>{t('success.total_paid')}</span>
             <span className="text-sm font-bold text-[var(--c-text)] tabular">
               {formatCurrency(totalAmount, currency)}
             </span>
           </div>
           <div className="flex items-center justify-between text-[var(--c-hint)]">
-            <span>Статус:</span>
-            <span className="text-green-600 font-semibold">Оплачено</span>
+            <span>{t('success.status_label')}</span>
+            <span className="text-green-600 font-semibold">{t('success.status_paid')}</span>
           </div>
         </div>
 
@@ -73,7 +73,7 @@ export function OrderSuccessModal({
             onClick={onClose}
             className="btn-filled"
           >
-            Вернуться в магазин
+            {t('success.back_catalog')}
           </button>
 
           <button
@@ -81,7 +81,7 @@ export function OrderSuccessModal({
             onClick={onCloseMiniApp}
             className="btn-tinted"
           >
-            Закрыть приложение
+            {t('success.close_app')}
           </button>
         </div>
       </div>

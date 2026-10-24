@@ -28,7 +28,7 @@ export function CartDrawer({
   onProceedCheckout,
   onHaptic,
 }: CartDrawerProps) {
-  const { formatCurrency } = useI18n();
+  const { t, formatCurrency } = useI18n();
 
   if (!isOpen) return null;
 
@@ -45,10 +45,12 @@ export function CartDrawer({
           </div>
           <div className="flex items-center justify-between px-4 pb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-[var(--c-text)]">Корзина</h2>
+              <h2 className="text-base font-semibold text-[var(--c-text)]">
+                {t('cart.drawer_title')}
+              </h2>
               {items.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-[var(--c-secondary)] text-[var(--c-hint)] text-xs font-medium">
-                  {items.length} поз.
+                  {items.length} {t('cart.items_suffix')}
                 </span>
               )}
             </div>
@@ -63,7 +65,7 @@ export function CartDrawer({
                   }}
                   className="text-xs text-[var(--c-destructive)] font-medium p-1"
                 >
-                  Очистить
+                  {t('cart.clear_btn')}
                 </button>
               )}
               <button
@@ -83,15 +85,19 @@ export function CartDrawer({
           {items.length === 0 ? (
             <div className="py-16 text-center space-y-2">
               <ShoppingBag className="w-12 h-12 text-[var(--c-hint)] mx-auto opacity-50" />
-              <p className="text-base font-medium text-[var(--c-text)]">Корзина пуста</p>
-              <p className="text-sm text-[var(--c-hint)]">Выберите товары из каталога, чтобы сделать заказ.</p>
+              <p className="text-base font-medium text-[var(--c-text)]">
+                {t('cart.empty_title')}
+              </p>
+              <p className="text-sm text-[var(--c-hint)]">
+                {t('cart.empty_subtitle')}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-[var(--c-separator)]">
               {items.map((item) => {
                 const img =
                   item.product.images?.[0] ||
-                  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=120&q=80';
+                  'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=120&q=80';
                 const itemTotal = Number(item.product.price) * item.quantity;
 
                 return (
@@ -109,7 +115,7 @@ export function CartDrawer({
                         {formatCurrency(Number(item.product.price), currency)}
                       </div>
                       <div className="text-xs font-semibold text-[var(--c-text)] tabular mt-1">
-                        Итого: {formatCurrency(itemTotal, currency)}
+                        {t('cart.item_total')} {formatCurrency(itemTotal, currency)}
                       </div>
                     </div>
 
@@ -121,7 +127,7 @@ export function CartDrawer({
                             onHaptic('light');
                             onUpdateQty(item.product.id, item.quantity - 1);
                           }}
-                          aria-label="Уменьшить"
+                          aria-label="-"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -133,7 +139,7 @@ export function CartDrawer({
                             onHaptic('light');
                             onUpdateQty(item.product.id, item.quantity + 1);
                           }}
-                          aria-label="Увеличить"
+                          aria-label="+"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
@@ -165,7 +171,7 @@ export function CartDrawer({
             style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
           >
             <div className="flex items-center justify-between text-sm">
-              <span className="text-[var(--c-hint)]">К оплате:</span>
+              <span className="text-[var(--c-hint)]">{t('cart.to_pay')}</span>
               <span className="text-lg font-bold text-[var(--c-text)] tabular">
                 {formatCurrency(totalAmount, currency)}
               </span>
@@ -179,7 +185,7 @@ export function CartDrawer({
               }}
               className="btn-filled"
             >
-              Перейти к оформлению
+              {t('cart.proceed_btn')}
             </button>
           </div>
         )}

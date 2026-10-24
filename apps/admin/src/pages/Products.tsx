@@ -5,7 +5,7 @@ import { Plus, Edit2, Trash2, Package, Search, Image as ImageIcon } from 'lucide
 import { Modal } from '@telegram-commerce/ui';
 import { formatMoney } from '../lib/format.js';
 
-export function Products() {
+export function Products({ currency = 'UZS' }: { currency?: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -203,7 +203,7 @@ export function Products() {
                       </td>
                       <td className="text-muted">{product.category || '—'}</td>
                       <td className="font-medium whitespace-nowrap">
-                        {formatMoney(Number(product.price), 'USD')}
+                        {formatMoney(Number(product.price), currency)}
                       </td>
                       <td>
                         <span

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Minus, Check } from 'lucide-react';
+import { Plus, Minus } from 'lucide-react';
 import { Product } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -20,11 +20,15 @@ export function ProductCard({
   onClickProduct,
   onUpdateQty,
 }: ProductCardProps) {
-  const { formatCurrency } = useI18n();
+  const { t, formatCurrency } = useI18n();
   const isOutOfStock = product.stock <= 0;
   const image =
     product.images?.[0] ||
-    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80';
+    'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=400&q=80';
+
+  const categoryTranslated = product.category
+    ? t(`category.${product.category.toLowerCase()}`) || product.category
+    : '';
 
   return (
     <div
@@ -41,11 +45,11 @@ export function ProductCard({
         />
         {isOutOfStock ? (
           <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-red-600 text-white text-[11px] font-medium">
-            Нет в наличии
+            {t('product.out_of_stock')}
           </span>
         ) : product.stock <= 5 ? (
           <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-amber-500 text-black text-[11px] font-semibold">
-            Осталось {product.stock}
+            {t('product.low_stock', { count: product.stock })}
           </span>
         ) : null}
       </div>
@@ -53,9 +57,9 @@ export function ProductCard({
       {/* Product Details */}
       <div className="p-3 flex flex-col flex-1 justify-between gap-2.5">
         <div>
-          {product.category && (
+          {categoryTranslated && (
             <span className="text-[11px] font-medium text-[var(--c-hint)] block uppercase tracking-wide">
-              {product.category}
+              {categoryTranslated}
             </span>
           )}
           <h3 className="text-sm font-medium text-[var(--c-text)] line-clamp-2 mt-0.5 leading-snug">
@@ -77,7 +81,7 @@ export function ProductCard({
               <button
                 type="button"
                 onClick={() => onUpdateQty && onUpdateQty(product.id, inCartQty - 1)}
-                aria-label="Уменьшить количество"
+                aria-label="-"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -86,7 +90,7 @@ export function ProductCard({
                 type="button"
                 disabled={inCartQty >= product.stock}
                 onClick={() => onUpdateQty && onUpdateQty(product.id, inCartQty + 1)}
-                aria-label="Увеличить количество"
+                aria-label="+"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -102,7 +106,7 @@ export function ProductCard({
               className="btn-tinted"
             >
               <Plus className="w-4 h-4 mr-1" />
-              <span>{isOutOfStock ? 'Распродано' : 'В корзину'}</span>
+              <span>{isOutOfStock ? t('product.sold_out') : t('miniapp.add_to_cart')}</span>
             </button>
           )}
         </div>

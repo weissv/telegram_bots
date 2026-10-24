@@ -1,42 +1,43 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@telegram-commerce/database';
 import bcrypt from 'bcryptjs';
 import { encryptBotToken, generateWebhookSecret, PLAN_TIERS } from '@telegram-commerce/config';
 
-const prisma = new PrismaClient();
-
 async function main() {
-  console.log('🌱 Seeding Telegram E-Commerce database...');
+  console.log('🌱 Seeding database...');
 
-  const demoTenantId = '00000000-0000-0000-0000-000000000001';
-  const ownerTelegramId = '987654321';
+  const demoTenantId = process.env.STANDALONE_TENANT_ID || '00000000-0000-0000-0000-000000000001';
+  const ownerTelegramId = process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
+  const botToken = process.env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0';
   const passwordHash = await bcrypt.hash('password123', 10);
   const webhookSecret = generateWebhookSecret();
-  const encryptedDummyToken = encryptBotToken('123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ');
+  const encryptedToken = encryptBotToken(botToken);
 
-  // Upsert Demo Tenant
+  const storeName = 'MODA Tashkent • Concept Store';
+  const storeDesc = 'Премиальная одежда и аксессуары из 100% узбекского хлопка и натуральной кожи с доставкой по Ташкенту и Узбекистану.';
+
   const tenant = await prisma.tenant.upsert({
     where: { id: demoTenantId },
     create: {
       id: demoTenantId,
-      name: 'Cyberpunk Apparel & Gear',
+      name: storeName,
       owner_telegram_id: ownerTelegramId,
       plan: PLAN_TIERS.PRO_30,
       is_active: true,
       botConfig: {
         create: {
-          bot_token_encrypted: encryptedDummyToken,
-          bot_username: 'cyberpunk_store_bot',
+          bot_token_encrypted: encryptedToken,
+          bot_username: 'miraiedu_bot',
           webhook_secret: webhookSecret,
-          currency: 'USD',
+          currency: 'UZS',
           theme_config: {
-            storeName: 'Cyberpunk Apparel & Gear',
-            primaryColor: '#0ea5e9',
+            storeName,
+            primaryColor: '#1a6fd4',
             accentColor: '#38bdf8',
-            backgroundColor: '#0f172a',
-            textColor: '#f8fafc',
-            bannerUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80',
+            backgroundColor: '#ffffff',
+            textColor: '#18181b',
+            bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
             logoUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80',
-            description: 'Futuristic streetwear, cybernetic accessories, and urban techwear with instant Telegram delivery.',
+            description: storeDesc,
           },
         },
       },
@@ -50,82 +51,81 @@ async function main() {
     },
     update: {
       is_active: true,
-      name: 'Cyberpunk Apparel & Gear',
+      owner_telegram_id: ownerTelegramId,
+      name: storeName,
     },
   });
 
-  console.log(`✅ Tenant created: ${tenant.name} (${tenant.id})`);
-
-  // Seed Products
   const productsData = [
     {
-      title: 'Neon Horizon Cyber Hoodie',
-      description: 'Waterproof techwear hoodie with reflective cyan circuit patterns and insulated ergonomic hood.',
-      price: 89.99,
+      title: 'Оверсайз худи Tashkent Edition',
+      description: 'Плотный премиальный футер 420г/м² из 100% узбекского длинноволокнистого хлопка пенье. Мягкий начес, глубокий капюшон, минималистичная вышивка на груди.',
+      price: 420000,
       stock: 35,
       category: 'Apparel',
       images: ['https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80'],
     },
     {
-      title: 'Vortex Runner Pulse Sneakers',
-      description: 'Ultra-lightweight knit runners with carbon fiber shank and reactive kinetic cushioning.',
-      price: 139.50,
-      stock: 20,
-      category: 'Footwear',
-      images: ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80'],
+      title: 'Базовая футболка Heavyweight Cotton',
+      description: 'Плотный узбекский хлопок 240г/м². Спущенная линия плеча, усиленный воротник, не садится и не деформируется после многочисленных стирок.',
+      price: 190000,
+      stock: 60,
+      category: 'Apparel',
+      images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80'],
     },
     {
-      title: 'Matrix Neural Smart Sunglasses',
-      description: 'Polarized UV400 lenses with integrated micro-HUD display and Bluetooth bone-conduction audio.',
-      price: 199.00,
-      stock: 12,
-      category: 'Accessories',
-      images: ['https://images.unsplash.com/photo-1572635196237-14b3f281503f?auto=format&fit=crop&w=800&q=80'],
-    },
-    {
-      title: 'Tactical Modular Crossbody Bag',
-      description: 'MOLLE-compatible ripstop nylon bag with Fidlock magnetic buckle and waterproof YKK zippers.',
-      price: 54.00,
-      stock: 45,
-      category: 'Accessories',
-      images: ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80'],
-    },
-    {
-      title: 'Titanium Mech Mechanical Keyboard',
-      description: 'Compact 75% hot-swappable mechanical keyboard with lubricated linear switches and RGB underglow.',
-      price: 165.00,
-      stock: 8,
-      category: 'Electronics',
-      images: ['https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80'],
-    },
-    {
-      title: 'Quantum ANC Wireless Earbuds',
-      description: 'Active noise cancelling with 40-hour battery life, low-latency gaming mode, and wireless charging.',
-      price: 119.00,
+      title: 'Брюки карго Urban Tech с карманами',
+      description: 'Износостойкий хлопковый рипстоп с грязе- и водоотталкивающей пропиткой. Эластичный пояс на шнурке, 6 функциональных карманов.',
+      price: 380000,
       stock: 25,
-      category: 'Electronics',
-      images: ['https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80'],
-    },
-    {
-      title: 'Stealth Cargo Tech Pants',
-      description: 'Stretch ripstop fabric with 8 concealed utility pockets, ankle cinch straps, and DWR coating.',
-      price: 78.00,
-      stock: 30,
       category: 'Apparel',
       images: ['https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=800&q=80'],
     },
     {
-      title: 'Cybernetic Glow LED Wristband',
-      description: 'Programmable RGB wristband synced via Telegram app with customizable pulse animations.',
-      price: 24.99,
-      stock: 100,
+      title: 'Кожаные кроссовки Classic Street Low',
+      description: 'Натуральная матовая телячья кожа, мягкая анатомическая стелька, вулканизированная нескользящая подошва. Универсальная городская классика.',
+      price: 650000,
+      stock: 18,
+      category: 'Footwear',
+      images: ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80'],
+    },
+    {
+      title: 'Кепка-бейсболка вышитая "Toshkent"',
+      description: '100% саржевый премиальный хлопок. Латунная пряжка с гравировкой для регулировки размера, вентиляционные люверсы, плотный козырек.',
+      price: 140000,
+      stock: 40,
       category: 'Accessories',
-      images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80'],
+      images: ['https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=800&q=80'],
+    },
+    {
+      title: 'Кожаный картхолдер ручной работы',
+      description: 'Ручной седельный шов, натуральная вощеная кожа растительного дубления. 6 отделений для банковских карт и центральный карман для купюр.',
+      price: 160000,
+      stock: 30,
+      category: 'Accessories',
+      images: ['https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=800&q=80'],
+    },
+    {
+      title: 'Поясная сумка-кроссбоди Cordura 1000D',
+      description: 'Сверхпрочный водонепроницаемый нейлон Cordura 1000D, японские молнии YKK, регулируемый ремень. Вмещает телефон, ключи и документы.',
+      price: 240000,
+      stock: 22,
+      category: 'Accessories',
+      images: ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80'],
+    },
+    {
+      title: 'Утепленный бомбер Minimalist Black',
+      description: 'Ветрозащитная матовая мембранная ткань, дышащий утеплитель холлофайбер, плотные эластичные манжеты, внутренний потайной карман.',
+      price: 790000,
+      stock: 15,
+      category: 'Apparel',
+      images: ['https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=800&q=80'],
     },
   ];
 
-  // Delete existing products for demo tenant to prevent duplicate accumulation
-  await prisma.product.deleteMany({ where: { tenant_id: demoTenantId } });
+  await prisma.product.deleteMany({
+    where: { tenant_id: demoTenantId },
+  });
 
   for (const p of productsData) {
     await prisma.product.create({
@@ -141,53 +141,13 @@ async function main() {
       },
     });
   }
-  console.log(`✅ Seeded ${productsData.length} catalog products`);
 
-  // Seed sample orders
-  await prisma.order.deleteMany({ where: { tenant_id: demoTenantId } });
-
-  await prisma.order.create({
-    data: {
-      tenant_id: demoTenantId,
-      customer_telegram_id: '1122334455',
-      customer_name: 'Sarah Connor',
-      customer_phone: '+1 555-0199',
-      shipping_address: '42 Skyway Blvd, Neo-Tokyo',
-      total_amount: 229.49 as any,
-      status: 'PAID',
-      payment_method: 'STRIPE',
-      items: [
-        { title: 'Neon Horizon Cyber Hoodie', price: 89.99, quantity: 1 },
-        { title: 'Vortex Runner Pulse Sneakers', price: 139.50, quantity: 1 },
-      ],
-    },
-  });
-
-  await prisma.order.create({
-    data: {
-      tenant_id: demoTenantId,
-      customer_telegram_id: '9988776655',
-      customer_name: 'David Martinez',
-      customer_phone: '+1 555-0842',
-      shipping_address: 'Apartment 7B, Night City',
-      total_amount: 199.00 as any,
-      status: 'DELIVERED',
-      payment_method: 'TELEGRAM_STARS',
-      items: [
-        { title: 'Matrix Neural Smart Sunglasses', price: 199.00, quantity: 1 },
-      ],
-    },
-  });
-
-  console.log('✅ Seeded demo orders');
-  console.log('\n🎉 Seeding complete! Login to Admin Backoffice with:');
-  console.log('   Email: demo_merchant@telegram-commerce.local');
-  console.log('   Password: password123\n');
+  console.log(`✅ Seeded ${productsData.length} Tashkent catalog products`);
 }
 
 main()
   .catch((e) => {
-    console.error('Seeding error:', e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {

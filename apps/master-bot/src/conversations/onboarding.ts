@@ -1,5 +1,5 @@
 import { type Conversation } from '@grammyjs/conversations';
-import { type Context } from 'grammy';
+import { type Context, InlineKeyboard } from 'grammy';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@telegram-commerce/database';
 import { encryptBotToken, generateWebhookSecret, getEnv, PLAN_TIERS } from '@telegram-commerce/config';
@@ -7,24 +7,50 @@ import { encryptBotToken, generateWebhookSecret, getEnv, PLAN_TIERS } from '@tel
 type MasterContext = Context;
 type MasterConversation = Conversation<MasterContext>;
 
+function isExitCommand(text?: string): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  return (
+    t === '/start' ||
+    t === '/cancel' ||
+    t === 'отмена' ||
+    t === '/stop' ||
+    t === 'cancel' ||
+    t === 'выход' ||
+    t.startsWith('/start')
+  );
+}
+
 export async function onboardingConversation(conversation: MasterConversation, ctx: MasterContext) {
   const env = getEnv();
   const telegramUserId = ctx.from?.id ? String(ctx.from.id) : '';
+
+  const cancelKeyboard = new InlineKeyboard().text('❌ Отменить создание магазина', 'onboard:cancel');
 
   await ctx.reply(
     `
 🚀 <b>Мастер создания интернет-магазина в Telegram</b>
 
 Настроим ваш автоматизированный магазин менее чем за 2 минуты!
+<i>(Отправьте /cancel или нажмите кнопку ниже в любой момент для отмены)</i>
 
 <b>Шаг 1 из 4:</b> Как называется ваш магазин или бренд?
-<i>(Например: Mirai Store, Модная Одежда, Электроника 24)</i>
+<i>(Например: MODA Tashkent, Samarkand Silk, Электроника 24)</i>
 `.trim(),
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', reply_markup: cancelKeyboard }
   );
 
   const nameMsg = await conversation.waitFor(':text');
-  const storeName = nameMsg.message?.text?.trim() || 'Мой Магазин';
+  const storeNameRaw = nameMsg.message?.text?.trim() || '';
+
+  if (isExitCommand(storeNameRaw)) {
+    await ctx.reply('❌ <b>Создание магазина отменено.</b>\n\nВведите /start для возврата в главное меню.', {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
+
+  const storeName = storeNameRaw || 'Мой Магазин';
 
   await ctx.reply(
     `
@@ -33,8 +59,10 @@ export async function onboardingConversation(conversation: MasterConversation, c
 1. Откройте @BotFather в Telegram.
 2. Отправьте команду /newbot и следуйте шагам для получения токена.
 3. Отправьте полученный токен в этот чат (например, <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>):
+
+<i>(Или отправьте /cancel для отмены)</i>
 `.trim(),
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', reply_markup: cancelKeyboard }
   );
 
   let botToken = '';
@@ -43,6 +71,13 @@ export async function onboardingConversation(conversation: MasterConversation, c
   while (true) {
     const tokenMsg = await conversation.waitFor(':text');
     const inputToken = tokenMsg.message?.text?.trim() || '';
+
+    if (isExitCommand(inputToken)) {
+      await ctx.reply('❌ <b>Создание магазина отменено.</b>\n\nВведите /start для возврата в главное меню.', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
 
     await ctx.reply('🔍 <i>Проверяем токен через Telegram Bot API...</i>', { parse_mode: 'HTML' });
 
@@ -59,7 +94,10 @@ export async function onboardingConversation(conversation: MasterConversation, c
       // API call failure
     }
 
-    await ctx.reply('❌ <b>Неверный токен бота.</b> Пожалуйста, перепроверьте токен от @BotFather и попробуйте еще раз:');
+    await ctx.reply(
+      '❌ <b>Неверный токен бота.</b> Пожалуйста, перепроверьте токен от @BotFather и отправьте еще раз (или /cancel для отмены):',
+      { parse_mode: 'HTML', reply_markup: cancelKeyboard }
+    );
   }
 
   await ctx.reply(
@@ -70,22 +108,40 @@ export async function onboardingConversation(conversation: MasterConversation, c
 1. Отправьте <code>1</code> — <b>Базовый чат-бот ($20/мес)</b>
 2. Отправьте <code>2</code> — <b>Pro Mini App витрина ($30/мес)</b>
 `.trim(),
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', reply_markup: cancelKeyboard }
   );
 
   const planMsg = await conversation.waitFor(':text');
-  const planChoice = planMsg.message?.text?.trim();
+  const planChoice = planMsg.message?.text?.trim() || '';
+
+  if (isExitCommand(planChoice)) {
+    await ctx.reply('❌ <b>Создание магазина отменено.</b>\n\nВведите /start для возврата в главное меню.', {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
+
   const selectedPlan = planChoice === '1' ? PLAN_TIERS.BASIC_20 : PLAN_TIERS.PRO_30;
 
   await ctx.reply(
     `
 <b>Шаг 4 из 4:</b> Введите ваш Email для входа в панель управления магазином:
+<i>(Или отправьте /cancel для отмены)</i>
 `.trim(),
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', reply_markup: cancelKeyboard }
   );
 
   const emailMsg = await conversation.waitFor(':text');
-  const adminEmail = emailMsg.message?.text?.trim() || `merchant_${Date.now()}@telegram-commerce.local`;
+  const adminEmailRaw = emailMsg.message?.text?.trim() || '';
+
+  if (isExitCommand(adminEmailRaw)) {
+    await ctx.reply('❌ <b>Создание магазина отменено.</b>\n\nВведите /start для возврата в главное меню.', {
+      parse_mode: 'HTML',
+    });
+    return;
+  }
+
+  const adminEmail = adminEmailRaw || `merchant_${Date.now()}@telegram-commerce.local`;
 
   // Generate temporary password
   const tempPassword = `Pass_${Math.random().toString(36).substring(2, 10)}!`;
@@ -111,10 +167,10 @@ export async function onboardingConversation(conversation: MasterConversation, c
             bot_token_encrypted: encryptedToken,
             bot_username: botUsername,
             webhook_secret: webhookSecret,
-            currency: 'USD',
+            currency: 'UZS',
             theme_config: {
               storeName,
-              primaryColor: '#0ea5e9',
+              primaryColor: '#1a6fd4',
               description: `Официальный Telegram-магазин ${storeName}`,
             },
           },

@@ -159,8 +159,8 @@ export function App() {
       <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-screen">
         <div className="max-w-6xl mx-auto">
           {activeTab === 'dashboard' && <Dashboard currency={currency} />}
-          {activeTab === 'products' && <Products />}
-          {activeTab === 'orders' && <Orders />}
+          {activeTab === 'products' && <Products currency={currency} />}
+          {activeTab === 'orders' && <Orders currency={currency} />}
           {activeTab === 'settings' && <Settings />}
         </div>
       </main>
