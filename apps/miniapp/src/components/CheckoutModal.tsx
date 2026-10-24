@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, CreditCard, Sparkles, CheckCircle2, Star, ShieldCheck, Truck } from 'lucide-react';
+import { X, Lock, CreditCard, Star, Check } from 'lucide-react';
 import { CartItem } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -29,7 +29,7 @@ export function CheckoutModal({
   onConfirmOrder,
   isProcessing,
 }: CheckoutModalProps) {
-  const { t, formatCurrency } = useI18n();
+  const { formatCurrency } = useI18n();
 
   const [customerName, setCustomerName] = useState(() => {
     if (initialTelegramUser) {
@@ -56,168 +56,184 @@ export function CheckoutModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 transition-opacity">
       <div
-        className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto animate-in zoom-in-95 duration-200"
+        className="w-full max-h-[92vh] bg-[var(--c-bg)] border-t border-[var(--c-separator)] rounded-t-2xl shadow-xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
-              <Lock className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-100">Оформление заказа</h3>
-              <p className="text-[11px] text-slate-400">Безопасный расчет через Telegram</p>
-            </div>
+        {/* Handle & Header */}
+        <div className="border-b border-[var(--c-separator)]">
+          <div className="w-full pt-2.5 pb-1.5 flex justify-center">
+            <div className="w-10 h-1 rounded-full bg-[var(--c-hint)] opacity-40" />
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h2 className="text-base font-semibold text-[var(--c-text)]">
+              Оформление заказа
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isProcessing}
+              className="p-1 rounded-full text-[var(--c-hint)] hover:text-[var(--c-text)]"
+              aria-label="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Telegram User Connected Card */}
-        {initialTelegramUser && (
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs">
-            <span className="text-slate-300">
-              Покупатель: <strong className="text-sky-300">{initialTelegramUser.first_name}</strong>
-              {initialTelegramUser.username ? ` (@${initialTelegramUser.username})` : ''}
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">
-              ID: {initialTelegramUser.id}
-            </span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-3.5">
-          {/* Customer Name */}
-          <div>
-            <label className="text-xs font-semibold text-slate-300">
-              Имя получателя <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Введите имя..."
-              className="mt-1 w-full h-11 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all"
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="text-xs font-semibold text-slate-300">
-              Номер телефона (для курьера / связи)
-            </label>
-            <input
-              type="tel"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="+998 90 123 45 67 / +7 999 123 45 67"
-              className="mt-1 w-full h-11 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all"
-            />
-          </div>
-
-          {/* Shipping Address */}
-          <div>
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5 text-sky-400" />
-              <span>Адрес доставки или пожелания к заказу</span>
-            </label>
-            <textarea
-              rows={2}
-              value={shippingAddress}
-              onChange={(e) => setShippingAddress(e.target.value)}
-              placeholder="Город, улица, дом, квартира или цифровой заказ..."
-              className="mt-1 w-full p-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-all resize-none"
-            />
-          </div>
-
-          {/* Payment Method Selector */}
-          <div>
-            <label className="text-xs font-semibold text-slate-300">
-              Способ оплаты
-            </label>
-            <div className="grid grid-cols-3 gap-2 mt-1.5">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('MOCK')}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                  paymentMethod === 'MOCK'
-                    ? 'border-sky-500 bg-sky-500/15 text-sky-400 shadow-md shadow-sky-500/10'
-                    : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Sparkles className="w-4 h-4 mb-1" />
-                <span className="text-[11px] font-bold">Быстрая</span>
-                <span className="text-[9px] opacity-75">Тест / Мгновенно</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('TELEGRAM_STARS')}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                  paymentMethod === 'TELEGRAM_STARS'
-                    ? 'border-amber-400 bg-amber-500/15 text-amber-300 shadow-md shadow-amber-500/10'
-                    : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Star className="w-4 h-4 mb-1 text-amber-400 fill-amber-400" />
-                <span className="text-[11px] font-bold">Stars</span>
-                <span className="text-[9px] opacity-75">Звёзды TG</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('STRIPE')}
-                className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all ${
-                  paymentMethod === 'STRIPE'
-                    ? 'border-sky-500 bg-sky-500/15 text-sky-400 shadow-md shadow-sky-500/10'
-                    : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <CreditCard className="w-4 h-4 mb-1" />
-                <span className="text-[11px] font-bold">Карта</span>
-                <span className="text-[9px] opacity-75">Visa / MC</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Guarantee Note */}
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/40 border border-slate-750/50 text-[11px] text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>Оплата защищена 256-битным шифрованием. Чек придёт сразу в чат.</span>
-          </div>
-
-          {/* Submit Block */}
-          <div className="pt-2 border-t border-slate-800 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">К оплате ({items.length} поз.):</span>
-              <span className="text-xl font-extrabold text-slate-100">
-                {formatCurrency(totalAmount, currency)}
+        {/* Scrollable Form */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Order Summary Strip */}
+          <div className="p-3.5 rounded-xl bg-[var(--c-secondary)] flex items-center justify-between text-sm">
+            <div>
+              <span className="font-medium text-[var(--c-text)]">Товары ({items.length}):</span>
+              <span className="text-xs text-[var(--c-hint)] block">
+                {items.map((i) => `${i.product.title} (×${i.quantity})`).join(', ')}
               </span>
             </div>
+            <div className="text-base font-bold text-[var(--c-text)] tabular shrink-0 ml-3">
+              {formatCurrency(totalAmount, currency)}
+            </div>
+          </div>
 
+          {/* Contact Details */}
+          <div className="space-y-3">
+            <div className="text-xs font-semibold text-[var(--c-hint)] uppercase tracking-wide">
+              Данные покупателя
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-[var(--c-hint)] block">Имя и фамилия</label>
+              <input
+                type="text"
+                required
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Иван Иванов"
+                className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-[var(--c-hint)] block">Контактный телефон</label>
+              <input
+                type="tel"
+                required
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="+7 (999) 000-00-00"
+                className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-[var(--c-hint)] block">Адрес или комментарий к доставке</label>
+              <input
+                type="text"
+                required
+                value={shippingAddress}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                placeholder="Город, улица, дом, квартира"
+                className="w-full h-11 px-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] placeholder:text-[var(--c-hint)]"
+              />
+            </div>
+          </div>
+
+          {/* Payment Methods */}
+          <div className="space-y-2 pt-2">
+            <div className="text-xs font-semibold text-[var(--c-hint)] uppercase tracking-wide">
+              Способ оплаты
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                onClick={() => setPaymentMethod('MOCK')}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                  paymentMethod === 'MOCK'
+                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
+                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
+                    {paymentMethod === 'MOCK' && (
+                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-[var(--c-text)]">
+                      Быстрая демо-оплата (Тест)
+                    </div>
+                    <div className="text-xs text-[var(--c-hint)]">Мгновенное подтверждение без списания</div>
+                  </div>
+                </div>
+              </label>
+
+              <label
+                onClick={() => setPaymentMethod('TELEGRAM_STARS')}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                  paymentMethod === 'TELEGRAM_STARS'
+                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
+                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
+                    {paymentMethod === 'TELEGRAM_STARS' && (
+                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1">
+                      <span>Telegram Stars</span>
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    </div>
+                    <div className="text-xs text-[var(--c-hint)]">Оплата звездами Telegram внутри приложения</div>
+                  </div>
+                </div>
+              </label>
+
+              <label
+                onClick={() => setPaymentMethod('STRIPE')}
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                  paymentMethod === 'STRIPE'
+                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
+                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
+                    {paymentMethod === 'STRIPE' && (
+                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-[var(--c-hint)]" />
+                      <span>Банковская карта (Stripe)</span>
+                    </div>
+                    <div className="text-xs text-[var(--c-hint)]">Visa, Mastercard, MIR</div>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Submit Action */}
+          <div
+            className="pt-4 pb-2"
+            style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
+          >
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all"
+              className="btn-filled"
             >
               {isProcessing ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Создание заказа...</span>
-                </div>
+                'Обработка заказа…'
               ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Оплатить {formatCurrency(totalAmount, currency)}</span>
-                </>
+                <span>Оплатить заказ · {formatCurrency(totalAmount, currency)}</span>
               )}
             </button>
           </div>

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { Product } from '../types/index.js';
-import { Plus, Edit2, Trash2, Package, Search, Image, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Package, Search, Image as ImageIcon } from 'lucide-react';
 import { Modal } from '@telegram-commerce/ui';
+import { formatMoney } from '../lib/format.js';
 
 export function Products() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -20,13 +21,14 @@ export function Products() {
   const [imageUrl, setImageUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const loadProducts = async () => {
     try {
       setIsLoading(true);
-      const data = await apiRequest('/api/v1/admin/products');
+      const data = await apiRequest<{ products: Product[] }>('/api/v1/admin/products');
       setProducts(data.products || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load products:', err);
     } finally {
       setIsLoading(false);
@@ -46,44 +48,49 @@ export function Products() {
     setCategory('Одежда');
     setImageUrl('https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80');
     setIsActive(true);
+    setErrorMsg(null);
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
     setTitle(p.title);
-    setDescription(p.description);
+    setDescription(p.description || '');
     setPrice(String(p.price));
     setStock(String(p.stock));
-    setCategory(p.category);
+    setCategory(p.category || 'Общее');
     setImageUrl(p.images?.[0] || '');
     setIsActive(p.is_active);
+    setErrorMsg(null);
     setIsModalOpen(true);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Вы уверены, что хотите удалить этот товар?')) return;
     try {
-      await apiRequest(`/api/v1/admin/products/${id}`, { method: 'DELETE' });
+      await apiRequest(`/api/v1/admin/products/${id}`, {
+        method: 'DELETE',
+      });
       await loadProducts();
     } catch (err: any) {
-      alert(`Ошибка удаления: ${err.message}`);
+      alert(`Ошибка при удалении товара: ${err.message}`);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMsg(null);
 
     try {
       const payload = {
         title,
         description,
-        price: Number.parseFloat(price),
-        stock: Number.parseInt(stock, 10),
+        price: parseFloat(price) || 0,
+        stock: parseInt(stock, 10) || 0,
         category,
         images: imageUrl ? [imageUrl] : [],
-        isActive,
+        is_active: isActive,
       };
 
       if (editingProduct) {
@@ -101,7 +108,7 @@ export function Products() {
       setIsModalOpen(false);
       await loadProducts();
     } catch (err: any) {
-      alert(`Ошибка сохранения: ${err.message}`);
+      setErrorMsg(err.message || 'Ошибка сохранения товара');
     } finally {
       setIsSubmitting(false);
     }
@@ -110,114 +117,140 @@ export function Products() {
   const filtered = products.filter(
     (p) =>
       p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.category.toLowerCase().includes(search.toLowerCase())
+      p.category?.toLowerCase().includes(search.toLowerCase()) ||
+      p.description?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Каталог товаров</h1>
-          <p className="text-sm text-slate-400">Управление ассортиментом витрины, ценами и складскими остатками.</p>
+          <h1>Каталог товаров</h1>
+          <p className="hint">Ассортимент витрины, остатки на складе и ценообразование.</p>
         </div>
-        <button
-          onClick={handleOpenAdd}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold text-xs shadow-lg shadow-sky-500/20 active:scale-95 transition-all"
-        >
+        <button type="button" onClick={handleOpenAdd} className="btn-primary">
           <Plus className="w-4 h-4" />
           <span>Добавить товар</span>
         </button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-        <input
-          type="text"
-          placeholder="Поиск по названию или категории..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-11 pl-10 pr-4 rounded-xl bg-slate-900 border border-slate-800 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-        />
+      {/* Search & Stats Bar */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-sm w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Поиск по названию или категории..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="input pl-9"
+          />
+        </div>
+        <div className="text-xs text-muted">
+          Всего товаров: <span className="font-semibold text-ink">{products.length}</span>
+        </div>
       </div>
 
-      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+      {/* Table Container */}
+      <div className="rounded-md border border-line bg-paper overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <div className="p-12 text-center text-muted">Загрузка товаров…</div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 space-y-3">
-            <Package className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-sm text-slate-400">Товары не найдены.</p>
+          <div className="p-12 text-center space-y-2">
+            <Package className="w-8 h-8 text-muted mx-auto" />
+            <p className="text-sm font-medium">Товары не найдены</p>
+            <p className="hint">Измените запрос поиска или добавьте новый товар.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase">
-                  <th className="pb-3">Товар</th>
-                  <th className="pb-3">Категория</th>
-                  <th className="pb-3">Цена</th>
-                  <th className="pb-3">Остаток</th>
-                  <th className="pb-3">Статус</th>
-                  <th className="pb-3 text-right">Действия</th>
+                <tr>
+                  <th scope="col">Товар</th>
+                  <th scope="col">Категория</th>
+                  <th scope="col">Цена</th>
+                  <th scope="col">Остаток</th>
+                  <th scope="col">Статус</th>
+                  <th scope="col" className="text-right">
+                    Действия
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody>
                 {filtered.map((product) => {
-                  const img = product.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=200&q=80';
+                  const img =
+                    product.images?.[0] ||
+                    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=120&q=80';
                   return (
-                    <tr key={product.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3.5">
+                    <tr key={product.id}>
+                      <td>
                         <div className="flex items-center gap-3">
                           <img
                             src={img}
-                            alt={product.title}
-                            className="w-11 h-11 rounded-xl object-cover bg-slate-800 shrink-0"
+                            alt=""
+                            className="w-10 h-10 rounded object-cover border border-line bg-subtle shrink-0"
                           />
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-100 truncate">{product.title}</p>
-                            <p className="text-xs text-slate-500 line-clamp-1">{product.description}</p>
+                            <div className="font-medium text-ink truncate">{product.title}</div>
+                            {product.description && (
+                              <div className="text-muted text-xs line-clamp-1">
+                                {product.description}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
-                      <td className="py-3.5">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-xs font-medium">
-                          {product.category}
-                        </span>
+                      <td className="text-muted">{product.category || '—'}</td>
+                      <td className="font-medium whitespace-nowrap">
+                        {formatMoney(Number(product.price), 'USD')}
                       </td>
-                      <td className="py-3.5 font-bold text-slate-100">
-                        ${Number(product.price).toFixed(2)}
-                      </td>
-                      <td className="py-3.5">
-                        <span className={`font-semibold text-xs ${product.stock <= 5 ? 'text-amber-400' : 'text-slate-300'}`}>
+                      <td>
+                        <span
+                          className={
+                            product.stock <= 0
+                              ? 'text-red-700 font-medium'
+                              : product.stock <= 5
+                              ? 'text-amber-600 font-medium'
+                              : 'text-ink'
+                          }
+                        >
                           {product.stock} шт.
                         </span>
                       </td>
-                      <td className="py-3.5">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                          product.is_active
-                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-slate-800 text-slate-500'
-                        }`}>
+                      <td>
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                            product.is_active ? 'text-green-700' : 'text-muted'
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              product.is_active ? 'bg-green-600' : 'bg-muted'
+                            }`}
+                          />
                           {product.is_active ? 'Активен' : 'Скрыт'}
                         </span>
                       </td>
-                      <td className="py-3.5 text-right space-x-2">
-                        <button
-                          onClick={() => handleOpenEdit(product)}
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white transition-colors"
-                          title="Редактировать"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
-                          title="Удалить"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <td className="text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(product)}
+                            className="btn-secondary !h-8 !px-2.5 text-xs"
+                            title="Редактировать"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(product.id)}
+                            className="btn-danger !h-8 !px-2.5 text-xs"
+                            title="Удалить"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -228,117 +261,121 @@ export function Products() {
         )}
       </div>
 
-      {/* Add / Edit Modal */}
-      {isModalOpen && (
-        <Modal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          title={editingProduct ? 'Редактировать товар' : 'Добавить новый товар'}
-        >
-          <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Edit / Add Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingProduct ? 'Редактировать товар' : 'Новый товар'}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {errorMsg && (
+            <div className="p-3 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
+              {errorMsg}
+            </div>
+          )}
+
+          <div>
+            <label className="label">Название товара</label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Например: Худи Оверсайз"
+              className="input"
+            />
+          </div>
+
+          <div>
+            <label className="label">Описание</label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Подробное описание товара, состав, размеры..."
+              className="w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-ink"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold text-slate-300">Название товара *</label>
+              <label className="label">Цена (USD)</label>
               <input
-                type="text"
+                type="number"
+                step="0.01"
+                min="0"
                 required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="например, Футболка Cyberpunk"
-                className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="input"
               />
             </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-300">Цена ($) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300">Остаток на складе *</label>
-                <input
-                  type="number"
-                  required
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-            </div>
-
             <div>
-              <label className="text-xs font-semibold text-slate-300">Категория *</label>
+              <label className="label">Остаток на складе</label>
+              <input
+                type="number"
+                min="0"
+                required
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                className="input"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Категория</label>
               <input
                 type="text"
-                required
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="например, Одежда, Обувь, Аксессуары"
-                className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                placeholder="Одежда, Аксессуары..."
+                className="input"
               />
             </div>
-
             <div>
-              <label className="text-xs font-semibold text-slate-300">Ссылка на фото (URL)</label>
+              <label className="label">URL изображения</label>
               <input
                 type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                placeholder="https://..."
+                className="input"
               />
             </div>
+          </div>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-300">Описание товара</label>
-              <textarea
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Краткое описание товара для каталога..."
-                className="mt-1 w-full p-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
+          <div className="pt-2">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                id="isActive"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 text-sky-500 focus:ring-sky-500 bg-slate-800"
+                className="h-4 w-4 rounded border-line text-ink focus:ring-0"
               />
-              <label htmlFor="isActive" className="text-xs text-slate-300 cursor-pointer">
-                Товар активен и отображается в витрине Telegram
-              </label>
-            </div>
+              <span className="text-sm font-medium">Товар отображается в каталоге</span>
+            </label>
+          </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200"
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-sky-500/20 active:scale-95 transition-all"
-              >
-                {isSubmitting ? 'Сохранение...' : editingProduct ? 'Сохранить изменения' : 'Создать товар'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-line">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="btn-secondary"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="btn-primary"
+            >
+              {isSubmitting ? 'Сохранение…' : editingProduct ? 'Сохранить изменения' : 'Создать товар'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

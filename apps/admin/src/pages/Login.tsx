@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { apiRequest, setAuthToken } from '../api/client.js';
-import { Bot, Lock, Mail, ArrowRight, Store } from 'lucide-react';
+import { Store, ArrowRight, Lock, Mail } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -23,7 +23,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
       const endpoint = isRegister ? '/api/v1/admin/auth/register' : '/api/v1/admin/auth/login';
       const payload = isRegister ? { email, password, storeName } : { email, password };
 
-      const data = await apiRequest(endpoint, {
+      const data = await apiRequest<{ token?: string }>(endpoint, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -33,107 +33,117 @@ export function Login({ onLoginSuccess }: LoginProps) {
         onLoginSuccess();
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      setError(err.message || 'Ошибка аутентификации');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-sky-500/10">
-            <Bot className="w-6 h-6" />
+    <div className="min-h-screen bg-subtle/40 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm rounded-md border border-line bg-paper p-6 shadow-sm space-y-6">
+        {/* Brand / Header */}
+        <div className="space-y-1.5">
+          <div className="w-8 h-8 rounded-md bg-ink text-paper flex items-center justify-center mb-3">
+            <Store className="w-4 h-4" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-100">
-            {isRegister ? 'Регистрация магазина' : 'Вход в панель управления'}
+          <h1>
+            {isRegister ? 'Регистрация магазина' : 'Вход в личный кабинет'}
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="hint">
             {isRegister
-              ? 'Запустите автоматизированные продажи в Telegram'
-              : 'Управление каталогом, заказами и ботами магазина'}
+              ? 'Создайте аккаунт и запустите продажи в Telegram.'
+              : 'Управление каталогом, заказами и Telegram-ботом.'}
           </p>
         </div>
 
         {error && (
-          <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-medium">
+          <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {isRegister && (
             <div>
-              <label className="text-xs font-semibold text-slate-300">Название магазина / бренда</label>
-              <div className="relative mt-1">
-                <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <input
-                  type="text"
-                  required
-                  value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)}
-                  placeholder="Например: Мой Магазин"
-                  className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-                />
-              </div>
+              <label className="label">Название магазина</label>
+              <input
+                type="text"
+                required
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="Apex Streetwear"
+                className="input"
+              />
             </div>
           )}
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Электронная почта (Email)</label>
-            <div className="relative mt-1">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="merchant@example.com"
-                className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
+            <label className="label">Электронная почта</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="merchant@example.com"
+              className="input"
+            />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Пароль</label>
-            <div className="relative mt-1">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-              />
-            </div>
+            <label className="label">Пароль</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="input font-mono"
+            />
           </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all"
-          >
-            {isLoading ? (
-              <span>Вход в систему...</span>
-            ) : (
-              <>
-                <span>{isRegister ? 'Зарегистрироваться и запустить' : 'Войти в панель'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="btn-primary w-full"
+            >
+              <span>{isLoading ? 'Проверка…' : isRegister ? 'Зарегистрироваться' : 'Войти в панель'}</span>
+              <ArrowRight className="w-4 h-4 ml-1" />
+            </button>
+          </div>
         </form>
 
-        <div className="text-center pt-2 border-t border-slate-800">
-          <button
-            type="button"
-            onClick={() => setIsRegister(!isRegister)}
-            className="text-xs text-slate-400 hover:text-sky-400 transition-colors"
-          >
-            {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрировать новый магазин'}
-          </button>
+        <div className="pt-3 border-t border-line text-center text-xs text-muted">
+          {isRegister ? (
+            <p>
+              Уже есть аккаунт?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(false);
+                  setError(null);
+                }}
+                className="link font-medium"
+              >
+                Войти
+              </button>
+            </p>
+          ) : (
+            <p>
+              Нет аккаунта магазина?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(true);
+                  setError(null);
+                }}
+                className="link font-medium"
+              >
+                Зарегистрировать магазин
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

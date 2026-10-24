@@ -21,8 +21,8 @@ export function useTelegram() {
         tg.ready?.();
         tg.expand?.();
         tg.enableClosingConfirmation?.();
-        tg.setHeaderColor?.('#0f172a');
-        tg.setBackgroundColor?.('#0f172a');
+        if (tg.setHeaderColor) tg.setHeaderColor('secondary_bg_color');
+        if (tg.setBackgroundColor) tg.setBackgroundColor('bg_color');
       } catch (e) {
         console.warn('Telegram WebApp init notice:', e);
       }

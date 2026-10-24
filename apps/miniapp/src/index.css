@@ -2,14 +2,328 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme tokens. Inside Telegram the --tg-theme-* variables are injected by
+ * telegram-web-app.js and update live when the user switches theme. The
+ * fallbacks below only apply in a regular browser.
+ */
+:root {
+  color-scheme: light dark;
+
+  --c-bg: var(--tg-theme-bg-color, #ffffff);
+  --c-secondary: var(--tg-theme-secondary-bg-color, #efeff4);
+  --c-section: var(--tg-theme-section-bg-color, var(--c-bg));
+  --c-text: var(--tg-theme-text-color, #000000);
+  --c-hint: var(--tg-theme-hint-color, #8a8a8e);
+  --c-subtitle: var(--tg-theme-subtitle-text-color, var(--c-hint));
+  --c-link: var(--tg-theme-link-color, #2481cc);
+  --c-destructive: var(--tg-theme-destructive-text-color, #e53935);
+  --c-section-header: var(--tg-theme-section-header-text-color, var(--c-hint));
+  --c-separator: var(
+    --tg-theme-section-separator-color,
+    color-mix(in srgb, var(--c-hint) 30%, transparent)
+  );
+
+  /* Brand = merchant colour when configured, otherwise Telegram's own button colour. */
+  --c-brand: var(--tg-theme-button-color, #2481cc);
+  --c-brand-text: var(--tg-theme-button-text-color, #ffffff);
+  --c-brand-ink: var(--c-brand);
+
+  --safe-bottom: calc(
+    env(safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px) +
+      var(--tg-safe-area-inset-bottom, 0px)
+  );
+  --safe-top: calc(
+    env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) +
+      var(--tg-safe-area-inset-top, 0px)
+  );
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: var(--tg-theme-bg-color, #212121);
+    --c-secondary: var(--tg-theme-secondary-bg-color, #0f0f0f);
+    --c-section: var(--tg-theme-section-bg-color, #212121);
+    --c-text: var(--tg-theme-text-color, #ffffff);
+    --c-hint: var(--tg-theme-hint-color, #8d8d93);
+    --c-link: var(--tg-theme-link-color, #6ab3f3);
+    --c-destructive: var(--tg-theme-destructive-text-color, #ff6b66);
+    --c-brand: var(--tg-theme-button-color, #6ab3f3);
+    --c-brand-text: var(--tg-theme-button-text-color, #000000);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-size: 16px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  /* 16px keeps iOS from zooming into focused fields. */
+  input,
+  textarea {
+    font: inherit;
+    font-size: 16px;
+    color: var(--c-text);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--c-hint);
+    opacity: 1;
+  }
+
+  img {
+    -webkit-user-drag: none;
+  }
+}
+
+@layer components {
+  /* Full-height scroll container that stacks like a native navigation page. */
+  .screen {
+    position: fixed;
+    inset: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    background: var(--c-bg);
+    animation: push 180ms ease-out;
+  }
+  .screen-grouped {
+    background: var(--c-secondary);
+  }
+  .screen-root {
+    animation: none;
+  }
+
+  /* iOS-style inset group: rounded block with hairline separators. */
+  .group {
+    margin: 0 16px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--c-section);
+  }
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 10px 16px;
+  }
+  .row + .row::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 0.5px;
+    background: var(--c-separator);
+  }
+  .group-title {
+    margin: 0;
+    padding: 20px 32px 8px;
+    font-size: 13px;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--c-section-header);
+  }
+  .group-note {
+    margin: 0;
+    padding: 8px 32px 0;
+    font-size: 13px;
+    color: var(--c-hint);
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    background: var(--c-secondary);
+    color: var(--c-hint);
+  }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    color: var(--c-text);
+  }
+
+  .chip {
+    flex: none;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 16px;
+    font-size: 15px;
+    white-space: nowrap;
+    background: var(--c-secondary);
+    color: var(--c-text);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--c-brand);
+    color: var(--c-brand-text);
+  }
+
+  .btn-tinted {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--c-brand) 14%, transparent);
+    color: var(--c-brand-ink);
+  }
+  .btn-tinted:active {
+    background: color-mix(in srgb, var(--c-brand) 24%, transparent);
+  }
+  .btn-tinted:disabled {
+    opacity: 0.45;
+  }
+
+  .btn-filled {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 50px;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 600;
+    background: var(--c-brand);
+    color: var(--c-brand-text);
+  }
+  .btn-filled:active {
+    opacity: 0.85;
+  }
+  .btn-filled:disabled {
+    opacity: 0.5;
+  }
+
+  .link-button {
+    color: var(--c-link);
+    font-size: 16px;
+  }
+
+  .stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--c-brand) 14%, transparent);
+    color: var(--c-brand-ink);
+  }
+  .stepper button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 100%;
+  }
+  .stepper button:disabled {
+    opacity: 0.35;
+  }
+  .stepper button:active {
+    opacity: 0.6;
+  }
+  .stepper span {
+    min-width: 24px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .skeleton {
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--c-hint) 16%, transparent);
+    animation: fade 1.4s ease-in-out infinite alternate;
+  }
+
+  /* Stand-in for Telegram's native MainButton when opened in a plain browser. */
+  .fallback-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    padding: 8px 16px calc(8px + var(--safe-bottom));
+    background: var(--c-bg);
+    border-top: 0.5px solid var(--c-separator);
+  }
+}
+
 @layer utilities {
-  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes push {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .skeleton {
+    animation: none;
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Check, ShoppingBag, ShieldCheck, Sparkles } from 'lucide-react';
+import { X, Plus, Minus, Check } from 'lucide-react';
 import { Product } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -22,7 +22,7 @@ export function ProductModal({
   onAddToCart,
   onHaptic,
 }: ProductModalProps) {
-  const { t, formatCurrency } = useI18n();
+  const { formatCurrency } = useI18n();
   const [qty, setQty] = useState(1);
 
   useEffect(() => {
@@ -61,105 +61,85 @@ export function ProductModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 transition-opacity">
       <div
-        className="w-full max-h-[90vh] bg-slate-900 border-t border-slate-800 rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
+        className="w-full max-h-[92vh] bg-[var(--c-bg)] border-t border-[var(--c-separator)] rounded-t-2xl shadow-xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Handle & Close button */}
-        <div className="relative w-full pt-3 pb-2 flex items-center justify-center">
-          <div className="w-12 h-1.5 rounded-full bg-slate-700/80" />
+        <div className="relative w-full pt-3 pb-2 flex items-center justify-center border-b border-[var(--c-separator)]">
+          <div className="w-10 h-1 rounded-full bg-[var(--c-hint)] opacity-40" />
           <button
+            type="button"
             onClick={onClose}
-            className="absolute right-4 top-3 p-2 rounded-full bg-slate-800/80 text-slate-400 hover:text-slate-100 transition-colors"
-            aria-label="Close"
+            className="absolute right-3 top-2.5 p-1.5 rounded-full text-[var(--c-hint)] hover:text-[var(--c-text)]"
+            aria-label="Закрыть"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Main Product Image */}
-          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-800 border border-slate-750 shadow-inner">
+          <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-[var(--c-secondary)]">
             <img
               src={image}
               alt={product.title}
               className="w-full h-full object-cover"
             />
             {isOutOfStock ? (
-              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-rose-500/95 text-white text-xs font-bold backdrop-blur shadow">
+              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-semibold">
                 Нет в наличии
               </span>
             ) : product.stock <= 5 ? (
-              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-amber-500/95 text-slate-950 text-xs font-bold backdrop-blur shadow">
-                Осталось всего {product.stock} шт.
+              <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-amber-500 text-black text-xs font-semibold">
+                Осталось {product.stock} шт.
               </span>
             ) : null}
-
-            {product.category && (
-              <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg bg-slate-950/75 border border-slate-700/80 text-sky-400 text-xs font-semibold backdrop-blur">
-                {product.category}
-              </span>
-            )}
           </div>
 
           {/* Title & Price */}
           <div className="space-y-1">
-            <h2 className="text-xl font-bold text-slate-100 leading-snug">
+            {product.category && (
+              <span className="text-xs font-medium text-[var(--c-hint)] uppercase tracking-wide">
+                {product.category}
+              </span>
+            )}
+            <h2 className="text-lg font-semibold text-[var(--c-text)] leading-snug">
               {product.title}
             </h2>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-sky-400">
-                {formatCurrency(unitPrice, currency)}
-              </span>
-              <span className="text-xs text-slate-400">за единицу</span>
-            </div>
-          </div>
-
-          {/* Guarantee Badges */}
-          <div className="grid grid-cols-2 gap-2.5 py-2">
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/50 border border-slate-750/60">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="text-xs font-medium text-slate-300">Гарантия качества</span>
-            </div>
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/50 border border-slate-750/60">
-              <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
-              <span className="text-xs font-medium text-slate-300">Мгновенный чек в чат</span>
+            <div className="text-xl font-bold text-[var(--c-text)] tabular pt-1">
+              {formatCurrency(unitPrice, currency)}
             </div>
           </div>
 
           {/* Description */}
           {product.description && (
-            <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Описание товара
-              </h3>
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">
-                {product.description}
-              </p>
+            <div className="p-3.5 rounded-xl bg-[var(--c-secondary)] text-sm text-[var(--c-text)] leading-relaxed">
+              {product.description}
             </div>
           )}
 
           {/* Quantity Selector */}
           {!isOutOfStock && (
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/70 border border-slate-750">
-              <span className="text-sm font-semibold text-slate-200">Количество:</span>
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between py-2 border-t border-[var(--c-separator)]">
+              <span className="text-sm font-medium text-[var(--c-text)]">Количество:</span>
+              <div className="stepper !h-10 !w-32">
                 <button
-                  onClick={handleDecrement}
+                  type="button"
                   disabled={qty <= 1}
-                  className="w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:opacity-30 flex items-center justify-center text-slate-100 transition-colors"
+                  onClick={handleDecrement}
+                  aria-label="Уменьшить"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <span className="text-base font-bold text-slate-100 min-w-6 text-center">
-                  {qty}
-                </span>
+                <span className="text-base">{qty}</span>
                 <button
-                  onClick={handleIncrement}
+                  type="button"
                   disabled={qty >= product.stock}
-                  className="w-9 h-9 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:opacity-30 flex items-center justify-center text-slate-100 transition-colors"
+                  onClick={handleIncrement}
+                  aria-label="Увеличить"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -168,25 +148,20 @@ export function ProductModal({
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/95 space-y-2">
+        {/* Action Button Footer */}
+        <div className="p-4 border-t border-[var(--c-separator)] bg-[var(--c-bg)]" style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}>
           <button
-            onClick={handleAdd}
+            type="button"
             disabled={isOutOfStock}
-            className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all"
+            onClick={handleAdd}
+            className="btn-filled"
           >
-            <ShoppingBag className="w-4 h-4" />
-            <span>
-              {isOutOfStock
-                ? 'Нет в наличии'
-                : `Добавить в корзину • ${formatCurrency(totalPrice, currency)}`}
-            </span>
+            {isOutOfStock ? (
+              'Товар распродан'
+            ) : (
+              <span>Добавить в корзину · {formatCurrency(totalPrice, currency)}</span>
+            )}
           </button>
-          {inCartQty > 0 && (
-            <p className="text-center text-xs text-emerald-400 font-medium">
-              ✓ Уже в корзине: {inCartQty} шт.
-            </p>
-          )}
         </div>
       </div>
     </div>

@@ -40,6 +40,18 @@ export interface AnalyticsMetrics {
   averageOrderValue: number;
 }
 
+export interface DailyRevenue {
+  date: string;
+  revenue: number;
+  orders: number;
+}
+
+export interface AnalyticsResponse {
+  metrics: AnalyticsMetrics;
+  recentOrders: Order[];
+  revenueByDay: DailyRevenue[];
+}
+
 export interface MerchantProfile {
   user: {
     userId: string;

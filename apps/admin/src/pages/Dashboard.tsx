@@ -1,202 +1,126 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client.js';
-import { AnalyticsMetrics, Order } from '../types/index.js';
-import { DollarSign, ShoppingBag, Clock, Package, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { AnalyticsResponse } from '../types/index.js';
+import { formatDayLabel, formatMoney } from '../lib/format.js';
+import { OrdersTable } from '../components/OrdersTable.js';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-export function Dashboard() {
-  const [metrics, setMetrics] = useState<AnalyticsMetrics | null>(null);
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+const compactNumber = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
+
+export function Dashboard({ currency }: { currency: string }) {
+  const [data, setData] = useState<AnalyticsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const data = await apiRequest('/api/v1/admin/analytics');
-        setMetrics(data.metrics);
-        setRecentOrders(data.recentOrders || []);
-      } catch (err) {
-        console.error('Analytics load error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
+    apiRequest<AnalyticsResponse>('/api/v1/admin/analytics')
+      .then(setData)
+      .catch((err: Error) => setError(err.message));
   }, []);
 
-  const chartData = [
-    { day: 'Пн', revenue: 140 },
-    { day: 'Вт', revenue: 220 },
-    { day: 'Ср', revenue: 380 },
-    { day: 'Чт', revenue: 290 },
-    { day: 'Пт', revenue: 490 },
-    { day: 'Сб', revenue: 620 },
-    { day: 'Вс', revenue: (metrics?.totalRevenue || 500) % 800 + 300 },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+  if (error) {
+    return <p role="alert" className="text-red-700">Не удалось загрузить данные: {error}</p>;
   }
 
+  if (!data) {
+    return <p className="text-muted">Загрузка…</p>;
+  }
+
+  const { metrics, recentOrders } = data;
+  const revenueByDay = data.revenueByDay ?? [];
+  const periodRevenue = revenueByDay.reduce((sum, d) => sum + d.revenue, 0);
+  const periodOrders = revenueByDay.reduce((sum, d) => sum + d.orders, 0);
+
+  const stats = [
+    { label: 'Выручка', value: formatMoney(metrics.totalRevenue, currency) },
+    { label: 'Оплаченные заказы', value: String(metrics.paidOrdersCount) },
+    { label: 'Ожидают оплаты', value: String(metrics.pendingOrdersCount) },
+    { label: 'Товаров в каталоге', value: String(metrics.totalProductsCount) },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Панель управления магазином</h1>
-          <p className="text-sm text-slate-400">Показатели продаж и онлайн-аналитика витрины Telegram.</p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          Бот активен и принимает заказы
-        </div>
-      </div>
+    <div className="space-y-8">
+      <h1>Обзор</h1>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Общая выручка</span>
-            <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400">
-              <DollarSign className="w-5 h-5" />
-            </div>
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="rounded-md border border-line p-4">
+            <dt className="text-muted">{stat.label}</dt>
+            <dd className="mt-1 break-words text-2xl font-semibold">{stat.value}</dd>
           </div>
-          <p className="text-2xl font-extrabold text-slate-100 mt-2">
-            ${(metrics?.totalRevenue || 0).toFixed(2)}
-          </p>
-          <p className="text-xs text-emerald-400 flex items-center gap-1 mt-1 font-medium">
-            <TrendingUp className="w-3.5 h-3.5" /> +14.2% за прошлую неделю
-          </p>
-        </div>
+        ))}
+      </dl>
 
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Оплаченные заказы</span>
-            <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-slate-100 mt-2">
-            {metrics?.paidOrdersCount || 0}
-          </p>
-          <p className="text-xs text-slate-400 mt-1 font-medium">Оформлено через Telegram</p>
+      <section aria-labelledby="revenue-heading">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4">
+          <h2 id="revenue-heading">Выручка за 14 дней</h2>
+          {periodOrders > 0 && (
+            <p className="text-muted">
+              {formatMoney(periodRevenue, currency)} · заказов: {periodOrders}
+            </p>
+          )}
         </div>
-
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ожидают оплаты</span>
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-slate-100 mt-2">
-            {metrics?.pendingOrdersCount || 0}
-          </p>
-          <p className="text-xs text-slate-400 mt-1 font-medium">Резерв товаров покупателями</p>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Товары в каталоге</span>
-            <div className="p-2 rounded-xl bg-indigo-500/15 text-indigo-400">
-              <Package className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-extrabold text-slate-100 mt-2">
-            {metrics?.totalProductsCount || 0}
-          </p>
-          <p className="text-xs text-slate-400 mt-1 font-medium">Доступно в Mini App</p>
-        </div>
-      </div>
-
-      {/* Chart Section */}
-      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <h3 className="text-base font-bold text-slate-100">Динамика выручки за неделю</h3>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-              <YAxis stroke="#64748b" fontSize={12} tickFormatter={(val) => `$${val}`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem' }}
-                itemStyle={{ color: '#38bdf8' }}
-              />
-              <Area type="monotone" dataKey="revenue" stroke="#0ea5e9" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Recent Orders Section */}
-      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-        <h3 className="text-base font-bold text-slate-100">Последние заказы покупателей</h3>
-        {recentOrders.length === 0 ? (
-          <p className="text-sm text-slate-400 py-6 text-center">Заказов пока не поступало.</p>
+        {periodOrders === 0 ? (
+          <p className="text-muted">За последние 14 дней оплаченных заказов не было.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-xs font-semibold text-slate-400 uppercase">
-                  <th className="pb-3">Номер заказа</th>
-                  <th className="pb-3">Покупатель</th>
-                  <th className="pb-3">Товары</th>
-                  <th className="pb-3">Сумма</th>
-                  <th className="pb-3">Статус</th>
-                  <th className="pb-3">Дата</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {recentOrders.map((order) => {
-                  const items = Array.isArray(order.items) ? order.items : [];
-                  const statusMap: Record<string, { label: string; class: string }> = {
-                    PAID: { label: 'Оплачен', class: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
-                    DELIVERED: { label: 'Доставлен', class: 'bg-sky-500/15 text-sky-400 border border-sky-500/30' },
-                    PENDING: { label: 'Ожидает оплаты', class: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
-                    CANCELLED: { label: 'Отменён', class: 'bg-rose-500/15 text-rose-400 border border-rose-500/30' },
-                  };
-                  const s = statusMap[order.status] || { label: order.status, class: 'bg-slate-700 text-slate-300' };
-
-                  return (
-                    <tr key={order.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3.5 font-mono text-xs text-sky-400 font-semibold">
-                        #{order.id.slice(0, 8)}
-                      </td>
-                      <td className="py-3.5 text-slate-200">
-                        {order.customer_name || 'Пользователь Telegram'}
-                      </td>
-                      <td className="py-3.5 text-slate-400 text-xs">
-                        {items.map((i: any) => `${i.title} (x${i.quantity})`).join(', ') || 'Товары'}
-                      </td>
-                      <td className="py-3.5 font-bold text-slate-100">
-                        ${Number(order.total_amount).toFixed(2)}
-                      </td>
-                      <td className="py-3.5">
-                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.class}`}>
-                          {s.label}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-slate-400 text-xs">
-                        {new Date(order.createdAt).toLocaleDateString('ru-RU')}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="h-60 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueByDay} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid vertical={false} stroke="#e6e6e1" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatDayLabel}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e6e6e1' }}
+                  tick={{ fill: '#6b6b66', fontSize: 12 }}
+                  interval="preserveStartEnd"
+                  minTickGap={24}
+                />
+                <YAxis
+                  tickFormatter={(value: number) => compactNumber.format(value)}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: '#6b6b66', fontSize: 12 }}
+                  width={48}
+                />
+                <Tooltip
+                  formatter={(value) => formatMoney(Number(value), currency)}
+                  labelFormatter={(label) => formatDayLabel(String(label))}
+                  contentStyle={{
+                    background: '#ffffff',
+                    border: '1px solid #e6e6e1',
+                    borderRadius: 6,
+                    boxShadow: 'none',
+                    fontSize: 13,
+                  }}
+                  itemStyle={{ color: '#18181b' }}
+                  cursor={{ stroke: '#e6e6e1' }}
+                />
+                <Area
+                  type="linear"
+                  dataKey="revenue"
+                  name="Выручка"
+                  stroke="#18181b"
+                  strokeWidth={1.5}
+                  fill="#18181b"
+                  fillOpacity={0.05}
+                  dot={false}
+                  activeDot={{ r: 3, fill: '#18181b', stroke: '#ffffff' }}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
-      </div>
+      </section>
+
+      <section aria-labelledby="recent-heading">
+        <h2 id="recent-heading" className="mb-3">Последние заказы</h2>
+        {recentOrders.length === 0 ? (
+          <p className="text-muted">Заказов пока нет.</p>
+        ) : (
+          <OrdersTable orders={recentOrders} currency={currency} />
+        )}
+      </section>
     </div>
   );
 }

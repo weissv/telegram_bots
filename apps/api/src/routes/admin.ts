@@ -155,6 +155,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const pendingOrders = orders.filter((o) => o.status === ORDER_STATUS.PENDING);
       const totalRevenue = paidOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
+      // Last 14 days (UTC), zero-filled, oldest first
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const now = new Date();
+      const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      const revenueByDay = Array.from({ length: 14 }, (_, i) => ({
+        date: new Date(todayUtc - (13 - i) * DAY_MS).toISOString().slice(0, 10),
+        revenue: 0,
+        orders: 0,
+      }));
+      const revenueDayIndex = new Map(revenueByDay.map((d, i) => [d.date, i]));
+      for (const o of paidOrders) {
+        const idx = revenueDayIndex.get(new Date(o.createdAt).toISOString().slice(0, 10));
+        if (idx !== undefined) {
+          revenueByDay[idx].revenue += Number(o.total_amount);
+          revenueByDay[idx].orders += 1;
+        }
+      }
+
       return reply.send({
         metrics: {
           totalRevenue,
@@ -164,6 +182,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           averageOrderValue: paidOrders.length ? totalRevenue / paidOrders.length : 0,
         },
         recentOrders: orders.slice(0, 10),
+        revenueByDay,
       });
     });
 

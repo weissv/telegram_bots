@@ -9,7 +9,7 @@ import { CartDrawer } from './components/CartDrawer.js';
 import { CheckoutModal } from './components/CheckoutModal.js';
 import { OrderSuccessModal } from './components/OrderSuccessModal.js';
 import { Product, ShopBootstrap, StoreTheme } from './types/index.js';
-import { Sparkles, Store, AlertCircle, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Store, AlertCircle, ShoppingBag } from 'lucide-react';
 
 const API_BASE =
   import.meta.env.VITE_API_URL ??
@@ -53,7 +53,7 @@ function AppContent() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((curr) => (curr === msg ? null : curr));
-    }, 2400);
+    }, 2000);
   }, []);
 
   // Fetch shop bootstrap metadata
@@ -69,13 +69,9 @@ function AppContent() {
         setBootstrap(data);
         setProducts(data.featuredProducts || []);
 
-        // Dynamic theme variable injection
-        if (data.theme) {
-          const root = document.documentElement;
-          if (data.theme.primaryColor) root.style.setProperty('--color-primary', data.theme.primaryColor);
-          if (data.theme.accentColor) root.style.setProperty('--color-accent', data.theme.accentColor);
-          if (data.theme.backgroundColor) root.style.setProperty('--color-bg', data.theme.backgroundColor);
-          if (data.theme.textColor) root.style.setProperty('--color-text', data.theme.textColor);
+        // Optional theme customization from tenant settings
+        if (data.theme?.primaryColor) {
+          document.documentElement.style.setProperty('--c-brand', data.theme.primaryColor);
         }
       } catch (err: any) {
         console.error('Bootstrap error:', err);
@@ -125,19 +121,14 @@ function AppContent() {
   useEffect(() => {
     if (!isInsideTelegram) return;
 
-    if (orderSuccess) {
-      mainButton.hide();
-      return;
-    }
-
-    if (isCheckoutOpen) {
+    if (orderSuccess || isCheckoutOpen) {
       mainButton.hide();
       return;
     }
 
     if (isCartOpen) {
       if (items.length > 0) {
-        const btnText = `Оформить заказ • ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
+        const btnText = `Оформить заказ · ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
         mainButton.setText(btnText);
         mainButton.show();
 
@@ -156,7 +147,7 @@ function AppContent() {
     }
 
     if (items.length > 0) {
-      const btnText = `Корзина (${totalCount}) • ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
+      const btnText = `Корзина (${totalCount}) · ${formatCurrency(totalAmount, theme.currency || 'USD')}`;
       mainButton.setText(btnText);
       mainButton.show();
 
@@ -199,7 +190,7 @@ function AppContent() {
   const handleAddToCart = (product: Product, quantity = 1) => {
     haptic.impact('medium');
     addItem(product, quantity);
-    showToast(`🛒 "${product.title}" добавлен в корзину`);
+    showToast(`Товар добавлен в корзину`);
   };
 
   const handleProceedCheckout = () => {
@@ -269,28 +260,33 @@ function AppContent() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6 space-y-4">
-        <div className="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-semibold text-slate-400">{t('miniapp.loading')}</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] p-6 space-y-4">
+        <div className="w-8 h-8 rounded-full border-2 border-[var(--c-brand)] border-t-transparent animate-spin" />
+        <p className="text-xs text-[var(--c-hint)]">{t('miniapp.loading') || 'Загрузка магазина…'}</p>
       </div>
     );
   }
 
   if (error && !bootstrap) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6 text-center space-y-4">
-        <AlertCircle className="w-12 h-12 text-rose-400" />
-        <h2 className="text-lg font-bold text-slate-100">{t('miniapp.error_title')}</h2>
-        <p className="text-sm text-slate-400 max-w-xs">{error}</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] p-6 text-center space-y-3">
+        <AlertCircle className="w-10 h-10 text-[var(--c-destructive)]" />
+        <h2 className="text-base font-semibold">{t('miniapp.error_title') || 'Магазин недоступен'}</h2>
+        <p className="text-xs text-[var(--c-hint)] max-w-xs">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      {/* Toast alert */}
+    <div
+      className="min-h-screen bg-[var(--c-bg)] text-[var(--c-text)] select-none overflow-x-hidden"
+      style={{
+        paddingBottom: items.length > 0 && !isInsideTelegram ? 'calc(76px + var(--safe-bottom))' : 'calc(24px + var(--safe-bottom))',
+      }}
+    >
+      {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-slate-800/95 border border-slate-700 text-xs font-semibold text-sky-300 shadow-xl backdrop-blur animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-full bg-[var(--c-text)] text-[var(--c-bg)] text-xs font-medium shadow-lg animate-in fade-in duration-200">
           {toastMessage}
         </div>
       )}
@@ -310,37 +306,36 @@ function AppContent() {
       {/* Store Banner */}
       {theme.bannerUrl && (
         <div className="px-4 mt-3">
-          <div className="relative h-36 w-full rounded-2xl overflow-hidden border border-slate-800 shadow-md">
+          <div className="relative h-32 w-full rounded-xl overflow-hidden border border-[var(--c-separator)] bg-[var(--c-secondary)]">
             <img
               src={theme.bannerUrl}
-              alt="Store Banner"
+              alt=""
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent flex items-end p-4">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 backdrop-blur-sm px-2.5 py-1 rounded-lg bg-slate-950/40">
-                <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                {theme.description || t('miniapp.featured')}
-              </span>
-            </div>
+            {theme.description && (
+              <div className="absolute inset-0 bg-black/40 flex items-end p-3">
+                <span className="text-xs font-medium text-white line-clamp-2">
+                  {theme.description}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Category Pills */}
+      {/* Category Chips Bar */}
       {bootstrap?.categories && bootstrap.categories.length > 0 && (
-        <div className="px-4 mt-4 overflow-x-auto no-scrollbar flex items-center gap-2">
+        <div className="px-4 mt-3 overflow-x-auto no-scrollbar flex items-center gap-1.5 pb-1">
           {bootstrap.categories.map((cat) => (
             <button
               key={cat}
+              type="button"
+              aria-pressed={selectedCategory === cat}
               onClick={() => {
                 haptic.selection();
                 setSelectedCategory(cat);
               }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                selectedCategory === cat
-                  ? 'bg-sky-500 text-white shadow-md shadow-sky-500/25 scale-105'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 active:scale-95'
-              }`}
+              className="chip"
             >
               {cat}
             </button>
@@ -348,25 +343,25 @@ function AppContent() {
         </div>
       )}
 
-      {/* Products Grid */}
-      <main className="px-4 mt-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-slate-200">
-            {selectedCategory === 'All' ? t('miniapp.all_products') : selectedCategory}
+      {/* Products Catalog Grid */}
+      <main className="px-4 mt-4">
+        <div className="flex items-center justify-between mb-2.5">
+          <h2 className="text-sm font-semibold text-[var(--c-text)]">
+            {selectedCategory === 'All' ? 'Все товары' : selectedCategory}
           </h2>
-          <span className="text-xs text-slate-500 font-medium">
-            {t('miniapp.items_count', { count: filteredProducts.length })}
+          <span className="text-xs text-[var(--c-hint)]">
+            {filteredProducts.length} шт.
           </span>
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div className="text-center py-16 rounded-2xl bg-slate-900/40 border border-slate-800/60 p-6 space-y-2">
-            <Store className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-sm font-semibold text-slate-300">{t('miniapp.no_products')}</p>
-            <p className="text-xs text-slate-500">{t('miniapp.no_products_hint')}</p>
+          <div className="text-center py-16 rounded-xl bg-[var(--c-secondary)] p-6 space-y-2">
+            <Store className="w-8 h-8 text-[var(--c-hint)] mx-auto opacity-50" />
+            <p className="text-sm font-medium">{t('miniapp.no_products') || 'Товары не найдены'}</p>
+            <p className="text-xs text-[var(--c-hint)]">Попробуйте изменить категорию или поисковый запрос.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-2 gap-3">
             {filteredProducts.map((product) => {
               const inCart = items.find((i) => i.product.id === product.id)?.quantity || 0;
               return (
@@ -376,6 +371,7 @@ function AppContent() {
                   currency={theme.currency || 'USD'}
                   inCartQty={inCart}
                   onAddToCart={(p) => handleAddToCart(p, 1)}
+                  onUpdateQty={updateQuantity}
                   onClickProduct={(p) => {
                     haptic.impact('light');
                     setSelectedProduct(p);
@@ -387,33 +383,29 @@ function AppContent() {
         )}
       </main>
 
-      {/* Desktop / Non-Telegram Floating Bottom Cart Bar */}
+      {/* Desktop / Browser Preview Fallback Bottom Bar */}
       {!isInsideTelegram && items.length > 0 && !isCartOpen && !isCheckoutOpen && !selectedProduct && (
-        <div className="fixed bottom-4 left-4 right-4 z-40 max-w-md mx-auto animate-in slide-in-from-bottom duration-300">
+        <div className="fallback-bar">
           <button
+            type="button"
             onClick={() => {
               haptic.impact('medium');
               setIsCartOpen(true);
             }}
-            className="w-full h-14 rounded-2xl bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-white font-bold text-sm px-5 flex items-center justify-between shadow-2xl shadow-sky-500/30 active:scale-[0.98] transition-all"
+            className="btn-filled flex items-center justify-between px-4"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-                <ShoppingBag className="w-4 h-4" />
-              </div>
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4" />
               <span>Корзина ({totalCount})</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-extrabold">
-                {formatCurrency(totalAmount, theme.currency || 'USD')}
-              </span>
-              <ArrowRight className="w-4 h-4" />
-            </div>
+            <span className="tabular font-semibold">
+              {formatCurrency(totalAmount, theme.currency || 'USD')}
+            </span>
           </button>
         </div>
       )}
 
-      {/* Product Quick View Bottom Sheet */}
+      {/* Product Quick View Sheet */}
       <ProductModal
         product={selectedProduct}
         currency={theme.currency || 'USD'}
@@ -454,7 +446,7 @@ function AppContent() {
         isProcessing={isProcessingCheckout}
       />
 
-      {/* Order Celebration Modal */}
+      {/* Order Success Modal */}
       <OrderSuccessModal
         isOpen={Boolean(orderSuccess)}
         orderId={orderSuccess?.orderId || null}
