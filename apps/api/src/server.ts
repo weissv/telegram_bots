@@ -85,7 +85,16 @@ export async function createServer(): Promise<FastifyInstance> {
         prefix: '/landing/',
         decorateReply: false,
       });
-      console.log(`📦 Serving Landing from ${landingDist} at /landing/`);
+
+      const landingAssets = path.join(landingDist, 'assets');
+      if (fs.existsSync(landingAssets)) {
+        await fastify.register(fastifyStatic, {
+          root: landingAssets,
+          prefix: '/assets/',
+          decorateReply: false,
+        });
+      }
+      console.log(`📦 Serving Landing from ${landingDist} at /landing/ and /`);
     }
   } catch (err) {
     console.warn('⚠️ Static serving plugin load notice:', err);
