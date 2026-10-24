@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client.js';
-import { Bot, Save, Key, ShieldCheck, Palette, Store } from 'lucide-react';
+import { Bot, Save, Key, ShieldCheck, Palette, Store, CheckCircle } from 'lucide-react';
 
 export function Settings() {
   const [storeName, setStoreName] = useState('');
@@ -68,7 +68,7 @@ export function Settings() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
-      alert(`Save failed: ${err.message}`);
+      alert(`Ошибка сохранения: ${err.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -85,10 +85,10 @@ export function Settings() {
         body: JSON.stringify({ botToken: newBotToken }),
       });
       setBotUsername(data.botUsername);
-      setTokenStatus(`Successfully connected to @${data.botUsername} with webhook registered!`);
+      setTokenStatus(`✅ Бот успешно подключен: @${data.botUsername}! Вебхук зарегистрирован.`);
       setNewBotToken('');
     } catch (err: any) {
-      setTokenStatus(`Error: ${err.message}`);
+      setTokenStatus(`❌ Ошибка: ${err.message}`);
     } finally {
       setIsUpdatingToken(false);
     }
@@ -97,13 +97,14 @@ export function Settings() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-slate-100">Store & Bot Settings</h1>
-        <p className="text-sm text-slate-400">Configure branding, Telegram bot integration, and notifications.</p>
+        <h1 className="text-2xl font-bold text-slate-100">Настройки витрины и бота</h1>
+        <p className="text-sm text-slate-400">Брендинг магазина, интеграция Telegram-бота и уведомления.</p>
       </div>
 
       {saveSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-semibold animate-in fade-in">
-          Settings saved and storefront cache updated successfully!
+        <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-semibold animate-in fade-in flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span>Настройки успешно сохранены, витрина обновлена!</span>
         </div>
       )}
 
@@ -111,12 +112,12 @@ export function Settings() {
       <form onSubmit={handleSaveSettings} className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-5">
         <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
           <Store className="w-5 h-5 text-sky-400" />
-          <h3 className="text-base font-bold text-slate-100">Storefront Branding</h3>
+          <h3 className="text-base font-bold text-slate-100">Брендинг витрины</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold text-slate-300">Store Name</label>
+            <label className="text-xs font-semibold text-slate-300">Название магазина</label>
             <input
               type="text"
               value={storeName}
@@ -126,37 +127,41 @@ export function Settings() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Currency</label>
+            <label className="text-xs font-semibold text-slate-300">Основная валюта</label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
               className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
             >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="RUB">RUB (₽)</option>
-              <option value="UZS">UZS (so'm)</option>
-              <option value="XTR">Telegram Stars (XTR)</option>
+              <option value="RUB">RUB (₽) — Российский рубль</option>
+              <option value="USD">USD ($) — Доллар США</option>
+              <option value="EUR">EUR (€) — Евро</option>
+              <option value="GBP">GBP (£) — Британский фунт</option>
+              <option value="UZS">UZS (so'm) — Узбекский сум</option>
+              <option value="XTR">Telegram Stars (⭐) — Звёзды Telegram</option>
             </select>
           </div>
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-slate-300">Merchant Telegram User ID (for Instant Order Alerts)</label>
+          <label className="text-xs font-semibold text-slate-300">
+            Telegram ID владельца (для мгновенных уведомлений о заказах)
+          </label>
           <input
             type="text"
             value={ownerTelegramId}
             onChange={(e) => setOwnerTelegramId(e.target.value)}
-            placeholder="e.g. 123456789"
+            placeholder="например, 8240936731"
             className="mt-1 w-full h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
           />
-          <p className="text-[11px] text-slate-500 mt-1">Get your Telegram ID from @userinfobot</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Узнать свой цифровой Telegram ID можно в боте @userinfobot
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold text-slate-300">Primary Brand Color</label>
+            <label className="text-xs font-semibold text-slate-300">Фирменный цвет витрины</label>
             <div className="flex items-center gap-3 mt-1">
               <input
                 type="color"
@@ -174,7 +179,7 @@ export function Settings() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Logo Image URL</label>
+            <label className="text-xs font-semibold text-slate-300">Ссылка на логотип (URL)</label>
             <input
               type="url"
               value={logoUrl}
@@ -186,7 +191,7 @@ export function Settings() {
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-slate-300">Store Banner Image URL</label>
+          <label className="text-xs font-semibold text-slate-300">Ссылка на баннер витрины (URL)</label>
           <input
             type="url"
             value={bannerUrl}
@@ -197,69 +202,75 @@ export function Settings() {
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-slate-300">Store Description</label>
+          <label className="text-xs font-semibold text-slate-300">Описание магазина</label>
           <textarea
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            placeholder="Краткий слоган или описание для заголовка витрины..."
             className="mt-1 w-full p-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500 resize-none"
           />
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="pt-2 flex justify-end">
           <button
             type="submit"
             disabled={isSaving}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs shadow-lg shadow-sky-500/25 transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-sky-500/20 active:scale-95 transition-all"
           >
             <Save className="w-4 h-4" />
-            <span>{isSaving ? 'Saving...' : 'Save Settings'}</span>
+            <span>{isSaving ? 'Сохранение...' : 'Сохранить настройки'}</span>
           </button>
         </div>
       </form>
 
-      {/* Botfather Token Config */}
-      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-5">
+      {/* Bot Connection Settings */}
+      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
         <div className="flex items-center gap-2 pb-3 border-b border-slate-800">
           <Bot className="w-5 h-5 text-sky-400" />
-          <h3 className="text-base font-bold text-slate-100">Telegram Bot Token & Webhook</h3>
+          <h3 className="text-base font-bold text-slate-100">Подключение Telegram-бота</h3>
         </div>
 
         {botUsername ? (
-          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2 font-semibold">
-            <ShieldCheck className="w-4 h-4" />
-            <span>Active Bot: @{botUsername} (AES-256-GCM Encrypted)</span>
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-800/60 border border-slate-750">
+            <div>
+              <span className="text-xs text-slate-400">Активный бот:</span>
+              <p className="text-sm font-bold text-sky-400">@{botUsername}</p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold border border-emerald-500/30">
+              Подключен
+            </span>
           </div>
         ) : (
-          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium">
-            No bot token configured yet. Paste your @BotFather token below.
-          </div>
+          <p className="text-xs text-slate-400">
+            Бот пока не привязан. Введите токен бота от @BotFather ниже.
+          </p>
         )}
 
         <div>
-          <label className="text-xs font-semibold text-slate-300">Update @BotFather API Token</label>
+          <label className="text-xs font-semibold text-slate-300">
+            Обновить токен бота (от @BotFather)
+          </label>
           <div className="flex gap-2 mt-1">
             <input
               type="password"
               value={newBotToken}
               onChange={(e) => setNewBotToken(e.target.value)}
-              placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+              placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ..."
               className="flex-1 h-10 px-3.5 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 focus:outline-none focus:border-sky-500 font-mono text-xs"
             />
             <button
-              type="button"
               onClick={handleUpdateBotToken}
               disabled={isUpdatingToken || !newBotToken}
-              className="px-5 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-sky-400 font-semibold text-xs border border-slate-700"
+              className="px-4 h-10 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-40 text-white font-bold text-xs shadow-md transition-all shrink-0"
             >
-              {isUpdatingToken ? 'Verifying...' : 'Connect Bot'}
+              {isUpdatingToken ? 'Подключение...' : 'Подключить'}
             </button>
           </div>
+          {tokenStatus && (
+            <p className="text-xs text-slate-300 mt-2 font-medium">{tokenStatus}</p>
+          )}
         </div>
-
-        {tokenStatus && (
-          <p className="text-xs font-semibold text-sky-400">{tokenStatus}</p>
-        )}
       </div>
     </div>
   );

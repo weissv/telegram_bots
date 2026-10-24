@@ -34,16 +34,16 @@ export async function sendMerchantOrderAlert(
     .join('\n');
 
   const text = `
-🎉 <b>NEW PAID ORDER RECEIVED!</b>
+🎉 <b>ПОЛУЧЕН НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!</b>
 
-🧾 <b>Order ID:</b> <code>#${order.orderId.slice(0, 8)}</code>
-💰 <b>Total Amount:</b> <b>${order.totalAmount.toFixed(2)} ${order.currency}</b>
-👤 <b>Customer:</b> ${escapeHtml(order.customerName || 'Telegram User')} (<code>${order.customerTelegramId}</code>)
-${order.customerPhone ? `📞 <b>Phone:</b> ${escapeHtml(order.customerPhone)}\n` : ''}${order.shippingAddress ? `📍 <b>Delivery Address:</b> ${escapeHtml(order.shippingAddress)}\n` : ''}
-📦 <b>Items Purchased:</b>
+🧾 <b>Номер заказа:</b> <code>#${order.orderId.slice(0, 8)}</code>
+💰 <b>Сумма к получению:</b> <b>${order.totalAmount.toFixed(2)} ${order.currency}</b>
+👤 <b>Покупатель:</b> ${escapeHtml(order.customerName || 'Пользователь Telegram')} (<code>${order.customerTelegramId}</code>)
+${order.customerPhone ? `📞 <b>Телефон:</b> ${escapeHtml(order.customerPhone)}\n` : ''}${order.shippingAddress ? `📍 <b>Адрес доставки:</b> ${escapeHtml(order.shippingAddress)}\n` : ''}
+📦 <b>Состав заказа:</b>
 ${itemsList}
 
-⚡ <i>Manage this order in your Merchant Admin Backoffice.</i>
+⚡ <i>Управляйте заказом и меняйте статус в вашей панели управления.</i>
 `.trim();
 
   try {

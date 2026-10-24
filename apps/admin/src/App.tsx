@@ -53,10 +53,10 @@ export function App() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="font-bold text-sm text-slate-100 truncate">
-                  {profile?.tenant?.name || 'Store Backoffice'}
+                  {profile?.tenant?.name || 'Панель управления магазином'}
                 </h2>
                 <span className="text-[11px] text-sky-400 font-semibold uppercase tracking-wider">
-                  {profile?.tenant?.plan?.replace('_', ' ') || 'Plan Active'}
+                  {profile?.tenant?.plan === 'pro' ? 'Тариф PRO' : profile?.tenant?.plan === 'enterprise' ? 'Тариф Enterprise' : 'Тариф Базовый'}
                 </span>
               </div>
             </div>
@@ -73,7 +73,7 @@ export function App() {
               }`}
             >
               <LayoutDashboard className="w-4 h-4" />
-              <span>Dashboard</span>
+              <span>Панель управления</span>
             </button>
 
             <button
@@ -85,7 +85,7 @@ export function App() {
               }`}
             >
               <Package className="w-4 h-4" />
-              <span>Products</span>
+              <span>Товары</span>
             </button>
 
             <button
@@ -97,7 +97,7 @@ export function App() {
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              <span>Orders</span>
+              <span>Заказы</span>
             </button>
 
             <button
@@ -109,7 +109,7 @@ export function App() {
               }`}
             >
               <SettingsIcon className="w-4 h-4" />
-              <span>Bot & Settings</span>
+              <span>Настройки и бот</span>
             </button>
           </nav>
         </div>
@@ -124,7 +124,7 @@ export function App() {
           >
             <span className="flex items-center gap-2">
               <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
-              Storefront Preview
+              Витрина (Mini App)
             </span>
           </a>
 
@@ -133,7 +133,7 @@ export function App() {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 text-xs font-medium transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            <span>Выйти</span>
           </button>
         </div>
       </aside>

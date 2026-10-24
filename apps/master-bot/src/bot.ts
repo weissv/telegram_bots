@@ -123,6 +123,49 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     await sendAdminDashboard(ctx);
   });
 
+  // Language switcher command
+  bot.command('lang', async (ctx) => {
+    const keyboard = new InlineKeyboard()
+      .text('🇷🇺 Русский (Основной)', 'lang:ru')
+      .row()
+      .text('🇬🇧 English', 'lang:en')
+      .text("🇺🇿 O'zbekcha", 'lang:uz');
+
+    await ctx.reply('🌐 <b>Выберите язык интерфейса / Select language:</b>', {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+  });
+
+  // Callbacks for language
+  bot.callbackQuery('lang:select', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    const keyboard = new InlineKeyboard()
+      .text('🇷🇺 Русский (Основной)', 'lang:ru')
+      .row()
+      .text('🇬🇧 English', 'lang:en')
+      .text("🇺🇿 O'zbekcha", 'lang:uz');
+
+    await ctx.reply('🌐 <b>Выберите язык интерфейса / Select language:</b>', {
+      parse_mode: 'HTML',
+      reply_markup: keyboard,
+    });
+  });
+
+  bot.callbackQuery(['lang:ru', 'lang:en', 'lang:uz'], async (ctx) => {
+    const chosen = ctx.callbackQuery.data.replace('lang:', '');
+    (ctx.session as any).lang = chosen;
+    const msg =
+      chosen === 'ru'
+        ? '✅ Язык установлен: Русский 🇷🇺'
+        : chosen === 'en'
+        ? '✅ Language set: English 🇬🇧'
+        : "✅ Til tanlandi: O'zbekcha 🇺🇿";
+    await ctx.answerCallbackQuery({ text: msg });
+    await ctx.reply(msg);
+    await handleSales(ctx);
+  });
+
   // Callbacks
   bot.callbackQuery('demo:view', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -135,7 +178,7 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   });
 
   bot.callbackQuery('admin:refresh', async (ctx) => {
-    await ctx.answerCallbackQuery({ text: '🔄 Updated' });
+    await ctx.answerCallbackQuery({ text: '🔄 Метрики обновлены' });
     await sendAdminDashboard(ctx, true);
   });
 
@@ -152,29 +195,29 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
       });
 
       if (products.length === 0) {
-        await ctx.reply('No products found in demo catalog yet.');
+        await ctx.reply('В демо-каталоге пока нет доступных товаров.');
         return;
       }
 
-      let text = '📦 <b>Featured Catalog Products:</b>\n\n';
+      let text = '📦 <b>Популярные товары каталога:</b>\n\n';
       for (const p of products) {
-        text += `• <b>${p.title}</b> — $${Number(p.price).toFixed(2)}\n<i>${p.description}</i>\n\n`;
+        text += `• <b>${p.title}</b> — $${Number(p.price).toFixed(2)}\n<i>${p.description || ''}</i>\n\n`;
       }
 
       const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
       const keyboard = new InlineKeyboard();
 
       if (isHttpsUrl(miniappUrl)) {
-        keyboard.webApp('📱 Open Store Mini App', miniappUrl);
+        keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
       } else if (isSafeTelegramUrl(miniappUrl)) {
-        keyboard.url('📱 Open Store Mini App', miniappUrl);
+        keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
       } else {
-        keyboard.text('⚡ Launch My Store', 'onboard:start');
+        keyboard.text('⚡ Запустить свой магазин', 'onboard:start');
       }
 
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     } catch (err: any) {
-      await ctx.reply(`⚠️ Could not load products: ${err?.message}`);
+      await ctx.reply(`⚠️ Ошибка загрузки товаров: ${err?.message}`);
     }
   });
 
@@ -191,7 +234,7 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
   const superAdminId = env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
 
   if (userId !== superAdminId && userId !== '8240936731') {
-    await ctx.reply('⛔ <b>Access Denied:</b> This command is restricted to the platform superadmin.', {
+    await ctx.reply('⛔ <b>Доступ запрещен:</b> Эта команда доступна только главному администратору платформы.', {
       parse_mode: 'HTML',
     });
     return;
@@ -208,32 +251,32 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
     const keyboard = new InlineKeyboard();
 
     if (isSafeTelegramUrl(env.PUBLIC_ADMIN_URL)) {
-      keyboard.url('💼 Open Merchant Admin Backoffice', env.PUBLIC_ADMIN_URL);
+      keyboard.url('💼 Панель управления магазином', env.PUBLIC_ADMIN_URL);
     }
 
-    keyboard.row().text('🔄 Refresh Metrics', 'admin:refresh');
+    keyboard.row().text('🔄 Обновить показатели', 'admin:refresh');
 
     if (isHttpsUrl(miniappUrl)) {
-      keyboard.webApp('📱 Open Store Mini App', miniappUrl);
+      keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
     } else if (isSafeTelegramUrl(miniappUrl)) {
-      keyboard.url('📱 Open Store Mini App', miniappUrl);
+      keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
     }
 
     const text = `
-👑 <b>Platform Superadmin Control Center</b>
+👑 <b>Центр управления платформой (Суперадмин)</b>
 
-👤 <b>Superadmin ID:</b> <code>${userId}</code>
-🌐 <b>System Status:</b> 🟢 Operational & Online
+👤 <b>ID администратора:</b> <code>${userId}</code>
+🌐 <b>Статус системы:</b> 🟢 Все службы активны и работают в штатном режиме
 
-📊 <b>Live Platform Metrics:</b>
-• Active Stores (Tenants): <b>${tenantsCount}</b>
-• Catalog Products: <b>${productsCount}</b>
-• Processed Orders: <b>${ordersCount}</b>
+📊 <b>Текущие показатели платформы:</b>
+• Активных магазинов (клиентов): <b>${tenantsCount}</b>
+• Товаров в каталоге: <b>${productsCount}</b>
+• Обработано заказов: <b>${ordersCount}</b>
 
-🔑 <b>Merchant Admin Credentials:</b>
+🔑 <b>Реквизиты входа в панель управления:</b>
 • <b>URL:</b> ${env.PUBLIC_ADMIN_URL}
 • <b>Email:</b> <code>demo_merchant@telegram-commerce.local</code>
-• <b>Password:</b> <code>password123</code>
+• <b>Пароль:</b> <code>password123</code>
     `.trim();
 
     if (isEdit && ctx.callbackQuery?.message) {
@@ -242,6 +285,6 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     }
   } catch (err: any) {
-    await ctx.reply(`⚠️ Failed to load admin metrics: ${err?.message}`);
+    await ctx.reply(`⚠️ Ошибка загрузки показателей: ${err?.message}`);
   }
 }

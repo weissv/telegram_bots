@@ -13,26 +13,26 @@ export async function onboardingConversation(conversation: MasterConversation, c
 
   await ctx.reply(
     `
-🚀 <b>Zero-Touch Storefront Setup Wizard</b>
+🚀 <b>Мастер создания интернет-магазина в Telegram</b>
 
-Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
+Настроим ваш автоматизированный магазин менее чем за 2 минуты!
 
-<b>Step 1 of 4:</b> What is the name of your Store/Brand?
-<i>(e.g., Cyberpunk Streetwear, Tokyo Bakery, Nova Gadgets)</i>
+<b>Шаг 1 из 4:</b> Как называется ваш магазин или бренд?
+<i>(Например: Mirai Store, Модная Одежда, Электроника 24)</i>
 `.trim(),
     { parse_mode: 'HTML' }
   );
 
   const nameMsg = await conversation.waitFor(':text');
-  const storeName = nameMsg.message?.text?.trim() || 'My Telegram Store';
+  const storeName = nameMsg.message?.text?.trim() || 'Мой Магазин';
 
   await ctx.reply(
     `
-<b>Step 2 of 4:</b> Enter your <b>@BotFather API Token</b>.
+<b>Шаг 2 из 4:</b> Введите API-токен бота от <b>@BotFather</b>.
 
-1. Open @BotFather on Telegram.
-2. Send /newbot and follow instructions to get your API Token.
-3. Paste the token here (e.g., <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>):
+1. Откройте @BotFather в Telegram.
+2. Отправьте команду /newbot и следуйте шагам для получения токена.
+3. Отправьте полученный токен в этот чат (например, <code>123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ</code>):
 `.trim(),
     { parse_mode: 'HTML' }
   );
@@ -44,7 +44,7 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
     const tokenMsg = await conversation.waitFor(':text');
     const inputToken = tokenMsg.message?.text?.trim() || '';
 
-    await ctx.reply('🔍 <i>Verifying credentials with Telegram Bot API...</i>', { parse_mode: 'HTML' });
+    await ctx.reply('🔍 <i>Проверяем токен через Telegram Bot API...</i>', { parse_mode: 'HTML' });
 
     try {
       const res = await fetch(`https://api.telegram.org/bot${inputToken}/getMe`);
@@ -59,16 +59,16 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
       // API call failure
     }
 
-    await ctx.reply('❌ <b>Invalid Bot Token.</b> Please check your token from @BotFather and try again:');
+    await ctx.reply('❌ <b>Неверный токен бота.</b> Пожалуйста, перепроверьте токен от @BotFather и попробуйте еще раз:');
   }
 
   await ctx.reply(
     `
-✅ <b>Bot Verified:</b> @${botUsername}
+✅ <b>Бот подтвержден:</b> @${botUsername}
 
-<b>Step 3 of 4:</b> Choose your Subscription Plan:
-1. Send <code>1</code> for <b>Basic Inline Bot ($20/mo)</b>
-2. Send <code>2</code> for <b>Pro Mini App Storefront ($30/mo)</b>
+<b>Шаг 3 из 4:</b> Выберите тариф подписки:
+1. Отправьте <code>1</code> — <b>Базовый чат-бот ($20/мес)</b>
+2. Отправьте <code>2</code> — <b>Pro Mini App витрина ($30/мес)</b>
 `.trim(),
     { parse_mode: 'HTML' }
   );
@@ -79,7 +79,7 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
 
   await ctx.reply(
     `
-<b>Step 4 of 4:</b> Enter your merchant email address for Admin Backoffice login:
+<b>Шаг 4 из 4:</b> Введите ваш Email для входа в панель управления магазином:
 `.trim(),
     { parse_mode: 'HTML' }
   );
@@ -91,7 +91,7 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
   const tempPassword = `Pass_${Math.random().toString(36).substring(2, 10)}!`;
   const passwordHash = await bcrypt.hash(tempPassword, 10);
 
-  await ctx.reply('⚙️ <i>Provisioning database, encrypting keys, and registering webhooks...</i>', {
+  await ctx.reply('⚙️ <i>Создаем базу данных магазина, шифруем ключи и настраиваем вебхуки...</i>', {
     parse_mode: 'HTML',
   });
 
@@ -115,7 +115,7 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
             theme_config: {
               storeName,
               primaryColor: '#0ea5e9',
-              description: `Official Telegram Storefront for ${storeName}`,
+              description: `Официальный Telegram-магазин ${storeName}`,
             },
           },
         },
@@ -144,7 +144,7 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
         body: JSON.stringify({
           menu_button: {
             type: 'web_app',
-            text: '🛍️ Open Store',
+            text: '🛍️ Открыть магазин',
             web_app: { url: miniappUrl },
           },
         }),
@@ -155,21 +155,21 @@ Let's set up your automated Telegram E-Commerce Store in under 2 minutes!
 
     await ctx.reply(
       `
-🎉 <b>CONGRATULATIONS! YOUR STORE IS LIVE!</b>
+🎉 <b>ПОЗДРАВЛЯЕМ! ВАШ МАГАЗИН ЗАПУЩЕН!</b>
 
-🤖 <b>Customer Bot:</b> @${botUsername}
-🌐 <b>Storefront URL:</b> ${env.PUBLIC_MINIAPP_URL}?tenant_id=${tenant.id}
-💼 <b>Merchant Admin Backoffice:</b> ${adminPanelUrl}
+🤖 <b>Бот магазина для покупателей:</b> @${botUsername}
+🌐 <b>Витрина (Mini App):</b> ${env.PUBLIC_MINIAPP_URL}?tenant_id=${tenant.id}
+💼 <b>Веб-панель управления:</b> ${adminPanelUrl}
 
-🔐 <b>Your Admin Credentials:</b>
+🔐 <b>Ваши данные для входа в панель:</b>
  • <b>Email:</b> <code>${adminEmail}</code>
- • <b>Password:</b> <code>${tempPassword}</code>
+ • <b>Пароль:</b> <code>${tempPassword}</code>
 
-⚡ <i>Open your bot @${botUsername} in Telegram to start adding products and taking orders!</i>
+⚡ <i>Перейдите в бота @${botUsername} или откройте веб-панель для добавления товаров и управления заказами!</i>
 `.trim(),
       { parse_mode: 'HTML' }
     );
   } catch (err: any) {
-    await ctx.reply(`❌ Provisioning error: ${err.message}. Please contact support.`);
+    await ctx.reply(`❌ Ошибка создания магазина: ${err.message}. Пожалуйста, обратитесь в поддержку.`);
   }
 }

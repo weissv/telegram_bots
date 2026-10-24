@@ -1,9 +1,10 @@
 import { ru } from './locales/ru.js';
+import { en } from './locales/en.js';
 import { uz } from './locales/uz.js';
 
 // ─── Types ───
 
-export type Locale = 'ru' | 'uz';
+export type Locale = 'ru' | 'en' | 'uz';
 
 export type TranslationKey = keyof typeof ru;
 
@@ -11,10 +12,10 @@ export type TranslationDictionary = Record<string, string>;
 
 // ─── Constants ───
 
-export const SUPPORTED_LOCALES: Locale[] = ['ru', 'uz'];
+export const SUPPORTED_LOCALES: Locale[] = ['ru', 'en', 'uz'];
 export const DEFAULT_LOCALE: Locale = 'ru';
 
-const dictionaries: Record<Locale, TranslationDictionary> = { ru, uz };
+const dictionaries: Record<Locale, TranslationDictionary> = { ru, en, uz };
 
 // ─── Core Translation Function ───
 
@@ -47,8 +48,9 @@ export function t(locale: Locale, key: string, params?: Record<string, string | 
 export function detectLocale(languageCode?: string): Locale {
   if (!languageCode) return DEFAULT_LOCALE;
   const lower = languageCode.toLowerCase();
+  if (lower === 'en' || lower.startsWith('en')) return 'en';
   if (lower === 'uz' || lower.startsWith('uz')) return 'uz';
-  return 'ru'; // Default to Russian for ru, en, and all others
+  return 'ru'; // Default to Russian
 }
 
 // ─── Currency Formatting ───
@@ -88,4 +90,5 @@ export function formatCurrency(amount: number, currency: string, _locale?: Local
 
 // ─── Re-exports ───
 export { ru } from './locales/ru.js';
+export { en } from './locales/en.js';
 export { uz } from './locales/uz.js';

@@ -28,7 +28,9 @@ export function Header({
   const { t } = useI18n();
 
   const toggleLocale = () => {
-    onLocaleChange(locale === 'ru' ? 'uz' : 'ru');
+    if (locale === 'ru') onLocaleChange('en');
+    else if (locale === 'en') onLocaleChange('uz');
+    else onLocaleChange('ru');
   };
 
   return (
@@ -69,7 +71,7 @@ export function Header({
             aria-label="Switch Language"
           >
             <Globe className="w-3.5 h-3.5 text-sky-400" />
-            <span>{locale === 'ru' ? 'RU' : 'UZ'}</span>
+            <span>{locale.toUpperCase()}</span>
           </button>
 
           {/* Cart Button */}

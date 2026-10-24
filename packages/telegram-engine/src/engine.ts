@@ -90,16 +90,16 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
     );
   });
 
-  // Text menu replies (support both RU and UZ button labels)
-  bot.hears(['📦 Каталог', '📦 Katalog'], (ctx) => handleCatalog(ctx, 1));
-  bot.hears(['🛒 Корзина', '🛒 Savatcha'], handleViewCart);
-  bot.hears(['📋 Мои заказы', '📋 Buyurtmalarim'], handleOrders);
-  bot.hears(['ℹ️ О магазине', "ℹ️ Do'kon haqida"], async (ctx) => {
+  // Text menu replies (support RU, EN and UZ button labels)
+  bot.hears(['📦 Каталог', '📦 Catalog', '📦 Katalog'], (ctx) => handleCatalog(ctx, 1));
+  bot.hears(['🛒 Корзина', '🛒 Cart', '🛒 Savatcha'], handleViewCart);
+  bot.hears(['📋 Мои заказы', '📋 My Orders', '📋 Buyurtmalarim'], handleOrders);
+  bot.hears(['ℹ️ О магазине', 'ℹ️ About Store', "ℹ️ Do'kon haqida"], async (ctx) => {
     const locale = ctx.locale;
     const info = ctx.tenant.themeConfig?.description || t(locale, 'store_info.default');
     await ctx.reply(`${t(locale, 'store_info.title')}\n\n${info}`, { parse_mode: 'HTML' });
   });
-  bot.hears(['🌐 Язык', '🌐 Til'], (ctx) => handleLanguageSelection(ctx));
+  bot.hears(['🌐 Язык', '🌐 Language', '🌐 Til'], (ctx) => handleLanguageSelection(ctx));
 
   // Callback queries
   bot.on('callback_query:data', async (ctx) => {
@@ -111,7 +111,7 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
     }
 
     // Language selection callbacks
-    if (data === 'lang:ru' || data === 'lang:uz') {
+    if (data === 'lang:ru' || data === 'lang:en' || data === 'lang:uz') {
       const newLocale = data.substring(5) as Locale;
       ctx.session.locale = newLocale;
       ctx.session.languageSelected = true;

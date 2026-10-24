@@ -39,8 +39,8 @@ export async function handleStart(ctx: BotContext) {
 
 ${escapeHtml(product.description || '')}
 
-💰 <b>${locale === 'ru' ? 'Цена' : 'Narx'}:</b> $${Number(product.price).toFixed(2)}
-📦 <b>${locale === 'ru' ? 'В наличии' : 'Mavjud'}:</b> ${product.stock}
+💰 <b>${locale === 'ru' ? 'Цена' : locale === 'en' ? 'Price' : 'Narxi'}:</b> $${Number(product.price).toFixed(2)}
+📦 <b>${locale === 'ru' ? 'В наличии' : locale === 'en' ? 'In stock' : 'Mavjud'}:</b> ${product.stock}
 `.trim();
 
         if (product.images?.[0]) {
@@ -100,7 +100,9 @@ ${isPro ? t(locale, 'start.tip_pro') : t(locale, 'start.tip_basic')}
  */
 export async function handleLanguageSelection(ctx: BotContext) {
   const keyboard = new InlineKeyboard()
-    .text('🇷🇺 Русский', 'lang:ru')
+    .text('🇷🇺 Русский (Основной)', 'lang:ru')
+    .row()
+    .text('🇬🇧 English', 'lang:en')
     .text("🇺🇿 O'zbekcha", 'lang:uz');
 
   await ctx.reply(t(ctx.locale, 'lang.select'), {

@@ -20,17 +20,13 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 const STORAGE_KEY = 'tc_admin_locale';
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && SUPPORTED_LOCALES.includes(stored as Locale)) {
-      return stored as Locale;
-    }
-    return DEFAULT_LOCALE;
-  });
+  // Admin backoffice is strictly Russian per user requirement
+  const [locale, setLocaleState] = useState<Locale>('ru');
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale);
-    localStorage.setItem(STORAGE_KEY, newLocale);
+    // Admin backoffice remains Russian
+    setLocaleState('ru');
+    localStorage.setItem(STORAGE_KEY, 'ru');
   }, []);
 
   const t = useCallback(

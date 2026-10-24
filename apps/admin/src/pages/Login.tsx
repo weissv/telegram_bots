@@ -47,12 +47,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
             <Bot className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-bold text-slate-100">
-            {isRegister ? 'Create Merchant Account' : 'Merchant Backoffice'}
+            {isRegister ? 'Регистрация магазина' : 'Вход в панель управления'}
           </h1>
           <p className="text-sm text-slate-400">
             {isRegister
-              ? 'Launch your automated Telegram e-commerce store'
-              : 'Sign in to manage catalog, orders, and bot configuration'}
+              ? 'Запустите автоматизированные продажи в Telegram'
+              : 'Управление каталогом, заказами и ботами магазина'}
           </p>
         </div>
 
@@ -65,7 +65,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <div>
-              <label className="text-xs font-semibold text-slate-300">Store / Brand Name</label>
+              <label className="text-xs font-semibold text-slate-300">Название магазина / бренда</label>
               <div className="relative mt-1">
                 <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -73,7 +73,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                   required
                   value={storeName}
                   onChange={(e) => setStoreName(e.target.value)}
-                  placeholder="Apex Streetwear"
+                  placeholder="Например: Мой Магазин"
                   className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-800 border border-slate-750 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
                 />
               </div>
@@ -81,7 +81,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           )}
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Email Address</label>
+            <label className="text-xs font-semibold text-slate-300">Электронная почта (Email)</label>
             <div className="relative mt-1">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
@@ -96,7 +96,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Password</label>
+            <label className="text-xs font-semibold text-slate-300">Пароль</label>
             <div className="relative mt-1">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
@@ -116,10 +116,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
             className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-sky-500/25 active:scale-[0.98] transition-all"
           >
             {isLoading ? (
-              <span>Authenticating...</span>
+              <span>Вход в систему...</span>
             ) : (
               <>
-                <span>{isRegister ? 'Register & Launch' : 'Sign In'}</span>
+                <span>{isRegister ? 'Зарегистрироваться и запустить' : 'Войти в панель'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -132,7 +132,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
             onClick={() => setIsRegister(!isRegister)}
             className="text-xs text-slate-400 hover:text-sky-400 transition-colors"
           >
-            {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Register new store"}
+            {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрировать новый магазин'}
           </button>
         </div>
       </div>

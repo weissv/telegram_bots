@@ -1,54 +1,85 @@
 import { InlineKeyboard, type Context } from 'grammy';
-import { getEnv, PLAN_PRICING, PLAN_TIERS, isSafeTelegramUrl } from '@telegram-commerce/config';
+import { getEnv, PLAN_PRICING, PLAN_TIERS, isSafeTelegramUrl, isHttpsUrl } from '@telegram-commerce/config';
 import { createSubscriptionCheckoutSession } from '@telegram-commerce/payments';
 
 export async function handleSales(ctx: Context) {
   const env = getEnv();
-  const telegramUserId = ctx.from?.id ? String(ctx.from.id) : '';
+  const lang = (ctx as any).session?.lang || 'ru';
+  const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
 
-  const keyboard = new InlineKeyboard()
-    .text('🚀 Setup My Store Bot (Free Trial)', 'onboard:start')
-    .row()
-    .text('🛍️ Test-Drive Demo Store', 'demo:view');
+  if (lang === 'en') {
+    const keyboard = new InlineKeyboard();
+    if (isHttpsUrl(miniappUrl)) {
+      keyboard.webApp('📱 Open Store Mini App', miniappUrl);
+    } else if (isSafeTelegramUrl(miniappUrl)) {
+      keyboard.url('📱 Open Store Mini App', miniappUrl);
+    }
 
-  const landingPricingUrl = `${env.PUBLIC_LANDING_URL}#pricing`;
-  if (isSafeTelegramUrl(landingPricingUrl)) {
     keyboard
       .row()
-      .url('💳 Pro Plan ($30/mo)', landingPricingUrl)
-      .url('⚡ Standalone VPS ($350)', landingPricingUrl);
-  } else {
-    keyboard
+      .text('🚀 Setup My Store Bot', 'onboard:start')
+      .text('🛍️ Chat Demo', 'demo:view')
       .row()
-      .text('💳 Pro Plan ($30/mo)', 'onboard:start')
-      .text('⚡ Standalone VPS ($350)', 'onboard:start');
+      .text('🌐 Сменить язык (RU)', 'lang:ru');
+
+    const text = `
+🌟 <b>Mirai Shop • Telegram E-Commerce Platform</b>
+
+Transform any Telegram bot into a full-featured online store with instant checkout, live order tracking, and an admin backoffice.
+
+<b>🏆 Plans & Features:</b>
+1️⃣ <b>Basic Inline Bot ($20/mo)</b> — Interactive chat catalog, cart, and instant order alerts.
+2️⃣ <b>Pro Mini App ($30/mo)</b> — Full-screen Telegram Mini App, animated UI, branding, and Apple/Google Pay.
+3️⃣ <b>Standalone VPS ($350 Lifetime)</b> — Dedicated private server, zero monthly fees, full source code.
+
+👇 <b>Tap below to test our live Mini App or launch your own store!</b>
+`.trim();
+
+    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+    return;
   }
 
+  // Primary Russian Version
+  const keyboard = new InlineKeyboard();
+
+  if (isHttpsUrl(miniappUrl)) {
+    keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
+  } else if (isSafeTelegramUrl(miniappUrl)) {
+    keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
+  }
+
+  keyboard
+    .row()
+    .text('🚀 Запустить свой магазин', 'onboard:start')
+    .text('🛍️ Демо в чате', 'demo:view')
+    .row()
+    .text('🌐 English / O\'zbekcha', 'lang:select');
+
   const text = `
-🌟 <b>Telegram E-Commerce Engine — Automated SaaS Platform</b>
+🌟 <b>Mirai Shop • Платформа интернет-магазинов в Telegram</b>
 
-Transform any Telegram bot into an enterprise-grade online storefront with instant checkout, live order tracking, and a powerful web admin backoffice.
+Превратите ваш Telegram-бот в полноценный современный онлайн-магазин с каталогом, корзиной, приемом платежей и веб-панелью управления для владельца.
 
-<b>🏆 PRICING TIERS:</b>
+<b>🏆 ТАРИФЫ И ВОЗМОЖНОСТИ:</b>
 
-1️⃣ <b>Basic Inline Bot — $20 / month</b>
- • Interactive inline keyboard catalog with pagination
- • In-chat shopping cart & order receipts
- • Instant Telegram alerts for new orders
- • Complete Merchant Web Admin backoffice
+1️⃣ <b>Базовый чат-бот — $20 / мес</b>
+ • Интерактивный каталог товаров с категориями и поиском
+ • Управление корзиной и расчет стоимости в чате
+ • Моментальные уведомления о новых заказах мерчанту
+ • Веб-панель управления товарами и заказами
 
-2️⃣ <b>Pro Mini App Storefront — $30 / month</b> <i>(Most Popular)</i>
- • <b>Full-Screen Telegram Mini App (TWA)</b> with animated UI
- • Custom brand colors, banners, and logos
- • Category filters, high-resolution galleries, and search
- • Instant one-tap checkout with Apple Pay / Google Pay / Cards
+2️⃣ <b>Pro Mini App витрина — $30 / мес</b> <i>(Рекомендуемый)</i>
+ • <b>Полноэкранное Telegram Mini App (TWA)</b> с плавным интерфейсом
+ • Персональный брендинг, логотипы, баннеры и фирменные цвета
+ • Фильтрация, галереи фото высокого разрешения и мгновенный поиск
+ • Моментальная оплата картами / Apple Pay / Google Pay в один клик
 
-3️⃣ <b>Standalone Self-Hosted VPS — $350 Lifetime</b>
- • 100% isolated private VPS deployment
- • Automated curl-to-bash zero-touch installer with Let's Encrypt SSL
- • Zero monthly fees, zero revenue cuts, full code access
+3️⃣ <b>Автономный сервер (Standalone VPS) — $350 навсегда</b>
+ • Развертывание на вашем отдельном выделенном VPS
+ • 0% комиссии с продаж, отсутствие абонентской платы
+ • Полный доступ к исходному коду и данным
 
-👇 <b>Tap below to launch your store or test our live demo!</b>
+👇 <b>Нажмите кнопку ниже, чтобы протестировать магазин или создать свой:</b>
 `.trim();
 
   await ctx.reply(text, {
