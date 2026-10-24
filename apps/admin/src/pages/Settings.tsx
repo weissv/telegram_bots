@@ -135,6 +135,8 @@ export function Settings() {
               <option value="USD">USD ($)</option>
               <option value="EUR">EUR (€)</option>
               <option value="GBP">GBP (£)</option>
+              <option value="RUB">RUB (₽)</option>
+              <option value="UZS">UZS (so'm)</option>
               <option value="XTR">Telegram Stars (XTR)</option>
             </select>
           </div>

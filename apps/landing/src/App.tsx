@@ -5,6 +5,18 @@ import { PricingTable } from './components/PricingTable.js';
 import { Faq } from './components/Faq.js';
 import { Bot, ExternalLink, Github } from 'lucide-react';
 
+const ADMIN_URL =
+  import.meta.env.VITE_ADMIN_URL ??
+  (typeof window !== 'undefined' && window.location.port === '5175'
+    ? 'http://localhost:5174'
+    : '/admin/');
+
+const MINIAPP_URL =
+  import.meta.env.VITE_MINIAPP_URL ??
+  (typeof window !== 'undefined' && window.location.port === '5175'
+    ? 'http://localhost:5173?tenant_id=demo-tenant'
+    : '/miniapp/?tenant_id=demo-tenant');
+
 export function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-sky-500 selection:text-white">
@@ -28,7 +40,7 @@ export function App() {
               Pricing
             </a>
             <a
-              href="http://localhost:5174"
+              href={ADMIN_URL}
               target="_blank"
               rel="noreferrer"
               className="text-xs font-semibold text-slate-300 hover:text-sky-400 transition-colors"
@@ -36,7 +48,7 @@ export function App() {
               Merchant Backoffice
             </a>
             <a
-              href="http://localhost:5173?tenant_id=demo-tenant"
+              href={MINIAPP_URL}
               target="_blank"
               rel="noreferrer"
               className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs shadow-md shadow-sky-500/20 transition-all active:scale-95"
@@ -58,8 +70,8 @@ export function App() {
       {/* Footer */}
       <footer className="py-12 border-t border-slate-800/80 bg-slate-950 text-center text-xs text-slate-500 space-y-4">
         <div className="flex items-center justify-center gap-6 text-slate-400">
-          <a href="http://localhost:5173?tenant_id=demo-tenant" className="hover:text-sky-400">Mini App Demo</a>
-          <a href="http://localhost:5174" className="hover:text-sky-400">Merchant Admin</a>
+          <a href={MINIAPP_URL} className="hover:text-sky-400">Mini App Demo</a>
+          <a href={ADMIN_URL} className="hover:text-sky-400">Merchant Admin</a>
           <a href="#pricing" className="hover:text-sky-400">Pricing & Tiers</a>
         </div>
         <p>© 2026 Telegram E-Commerce Monorepo. Production-Ready Multi-Tenant SaaS & Standalone Engine.</p>

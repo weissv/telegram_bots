@@ -53,9 +53,10 @@ export async function createServer(): Promise<FastifyInstance> {
     secret: env.JWT_SECRET,
   });
 
-  // Static files for Telegram Mini App & Merchant Admin
+  // Static files for Telegram Mini App, Merchant Admin & Landing
   const miniappDist = findDistPath('miniapp');
   const adminDist = findDistPath('admin');
+  const landingDist = findDistPath('landing');
 
   try {
     const fastifyStatic = ((await import('@fastify/static' as any)) as any).default;
@@ -77,6 +78,15 @@ export async function createServer(): Promise<FastifyInstance> {
       });
       console.log(`📦 Serving Admin from ${adminDist} at /admin/`);
     }
+
+    if (fs.existsSync(landingDist)) {
+      await fastify.register(fastifyStatic, {
+        root: landingDist,
+        prefix: '/landing/',
+        decorateReply: false,
+      });
+      console.log(`📦 Serving Landing from ${landingDist} at /landing/`);
+    }
   } catch (err) {
     console.warn('⚠️ Static serving plugin load notice:', err);
   }
@@ -91,8 +101,14 @@ export async function createServer(): Promise<FastifyInstance> {
     };
   });
 
-  // Root redirect to Mini App storefront
+  // Root route: serve Landing if built, otherwise redirect to demo storefront
   fastify.get('/', async (req, reply) => {
+    if (fs.existsSync(path.join(landingDist, 'index.html'))) {
+      if ((reply as any).sendFile) {
+        return (reply as any).sendFile('index.html', landingDist);
+      }
+      return reply.type('text/html').send(fs.readFileSync(path.join(landingDist, 'index.html'), 'utf8'));
+    }
     return reply.redirect('/miniapp/?tenant_id=demo-tenant');
   });
 
@@ -115,6 +131,12 @@ export async function createServer(): Promise<FastifyInstance> {
         return (reply as any).sendFile('index.html', miniappDist);
       }
       return reply.type('text/html').send(fs.readFileSync(path.join(miniappDist, 'index.html'), 'utf8'));
+    }
+    if ((req.url.startsWith('/landing') || req.url === '/') && fs.existsSync(path.join(landingDist, 'index.html'))) {
+      if ((reply as any).sendFile) {
+        return (reply as any).sendFile('index.html', landingDist);
+      }
+      return reply.type('text/html').send(fs.readFileSync(path.join(landingDist, 'index.html'), 'utf8'));
     }
     return reply.status(404).send({ error: 'Route not found' });
   });

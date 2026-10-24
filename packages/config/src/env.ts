@@ -58,6 +58,9 @@ export function getEnv(): AppEnv {
       PUBLIC_ADMIN_URL:
         process.env.PUBLIC_ADMIN_URL ||
         (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/admin` : 'http://localhost:5174'),
+      PUBLIC_LANDING_URL:
+        process.env.PUBLIC_LANDING_URL ||
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}` : 'http://localhost:5175'),
     };
 
     const result = envSchema.safeParse(rawEnv);
@@ -76,3 +79,25 @@ export function getEnv(): AppEnv {
   }
   return parsedEnv;
 }
+
+/**
+ * Validates whether a URL is safe to pass to Telegram Bot API button URLs.
+ * Telegram strictly rejects localhost, 127.0.0.1, and malformed URLs.
+ */
+export function isSafeTelegramUrl(url?: string): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('https://') && !trimmed.startsWith('http://')) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('localhost') || lower.includes('127.0.0.1')) return false;
+  return true;
+}
+
+/**
+ * Validates whether a URL meets Telegram's strict HTTPS requirement for WebApps and Menu buttons.
+ */
+export function isHttpsUrl(url?: string): boolean {
+  if (!url) return false;
+  return url.trim().toLowerCase().startsWith('https://');
+}
+

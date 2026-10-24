@@ -1,5 +1,5 @@
 import { InlineKeyboard, type Context } from 'grammy';
-import { getEnv, PLAN_PRICING, PLAN_TIERS } from '@telegram-commerce/config';
+import { getEnv, PLAN_PRICING, PLAN_TIERS, isSafeTelegramUrl } from '@telegram-commerce/config';
 import { createSubscriptionCheckoutSession } from '@telegram-commerce/payments';
 
 export async function handleSales(ctx: Context) {
@@ -9,10 +9,20 @@ export async function handleSales(ctx: Context) {
   const keyboard = new InlineKeyboard()
     .text('🚀 Setup My Store Bot (Free Trial)', 'onboard:start')
     .row()
-    .text('🛍️ Test-Drive Demo Store', 'demo:view')
-    .row()
-    .url('💳 Pro Plan ($30/mo)', `${env.PUBLIC_LANDING_URL}#pricing`)
-    .url('⚡ Standalone VPS ($350)', `${env.PUBLIC_LANDING_URL}#pricing`);
+    .text('🛍️ Test-Drive Demo Store', 'demo:view');
+
+  const landingPricingUrl = `${env.PUBLIC_LANDING_URL}#pricing`;
+  if (isSafeTelegramUrl(landingPricingUrl)) {
+    keyboard
+      .row()
+      .url('💳 Pro Plan ($30/mo)', landingPricingUrl)
+      .url('⚡ Standalone VPS ($350)', landingPricingUrl);
+  } else {
+    keyboard
+      .row()
+      .text('💳 Pro Plan ($30/mo)', 'onboard:start')
+      .text('⚡ Standalone VPS ($350)', 'onboard:start');
+  }
 
   const text = `
 🌟 <b>Telegram E-Commerce Engine — Automated SaaS Platform</b>

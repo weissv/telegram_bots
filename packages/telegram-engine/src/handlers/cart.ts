@@ -2,7 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import { BotContext, CartItem } from '../types.js';
 import { getCartInlineKeyboard } from '../keyboards/index.js';
 import { createOrderCheckoutSession, createMockPaymentSession } from '@telegram-commerce/payments';
-import { getEnv, ORDER_STATUS } from '@telegram-commerce/config';
+import { getEnv, ORDER_STATUS, isSafeTelegramUrl } from '@telegram-commerce/config';
 import { t, formatCurrency } from '@telegram-commerce/i18n';
 
 export async function handleAddToCart(ctx: BotContext, productId: string) {
@@ -187,7 +187,12 @@ export async function handleCartCheckout(ctx: BotContext) {
     });
   }
 
-  const payKeyboard = new InlineKeyboard().url(t(locale, 'checkout.pay_now'), sessionResult.paymentUrl);
+  const payKeyboard = new InlineKeyboard();
+  if (isSafeTelegramUrl(sessionResult.paymentUrl)) {
+    payKeyboard.url(t(locale, 'checkout.pay_now'), sessionResult.paymentUrl);
+  } else {
+    payKeyboard.text(`💳 ${t(locale, 'checkout.pay_now')} (Instant Demo Pay)`, `order:pay:${order.id}`);
+  }
 
   const text = `
 ${t(locale, 'checkout.created')}

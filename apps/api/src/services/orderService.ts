@@ -1,7 +1,7 @@
 import { prisma } from '@telegram-commerce/database';
 import { createOrderCheckoutSession, createMockPaymentSession, PaymentSessionResult } from '@telegram-commerce/payments';
 import { getEnv, ORDER_STATUS } from '@telegram-commerce/config';
-import { sendMerchantOrderAlert } from '@telegram-commerce/telegram-engine';
+import { sendMerchantOrderAlert, sendCustomerOrderReceipt } from '@telegram-commerce/telegram-engine';
 import { getOrInitBot, getTenantBotData } from './botManager.js';
 import { enqueueReservationExpiry, cancelReservationExpiry } from './reservationWorker.js';
 
@@ -184,7 +184,7 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
 export async function fulfillOrder(orderId: string, paymentId?: string): Promise<void> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { tenant: true },
+    include: { tenant: { include: { botConfig: true } } },
   });
 
   if (!order || order.status === ORDER_STATUS.PAID) {
@@ -202,23 +202,38 @@ export async function fulfillOrder(orderId: string, paymentId?: string): Promise
     },
   });
 
-  // Notify merchant via Telegram bot
+  // Notify merchant and customer via Telegram bot
   try {
     const botData = await getOrInitBot(order.tenant_id);
-    if (botData && order.tenant.owner_telegram_id) {
+    if (botData) {
       const items = Array.isArray(order.items) ? (order.items as any[]) : [];
-      await sendMerchantOrderAlert(botData.bot, order.tenant.owner_telegram_id, {
-        orderId: order.id,
-        totalAmount: Number(order.total_amount),
-        currency: 'USD',
-        customerTelegramId: order.customer_telegram_id,
-        customerName: order.customer_name || undefined,
-        customerPhone: order.customer_phone || undefined,
-        shippingAddress: order.shipping_address || undefined,
-        items,
-      });
+      const currency = order.tenant.botConfig?.currency || 'USD';
+
+      if (order.tenant.owner_telegram_id) {
+        await sendMerchantOrderAlert(botData.bot, order.tenant.owner_telegram_id, {
+          orderId: order.id,
+          totalAmount: Number(order.total_amount),
+          currency,
+          customerTelegramId: order.customer_telegram_id,
+          customerName: order.customer_name || undefined,
+          customerPhone: order.customer_phone || undefined,
+          shippingAddress: order.shipping_address || undefined,
+          items,
+        });
+      }
+
+      // Notify customer if customer_telegram_id is a numeric Telegram user ID
+      if (order.customer_telegram_id && /^\d+$/.test(order.customer_telegram_id)) {
+        await sendCustomerOrderReceipt(botData.bot, order.customer_telegram_id, {
+          orderId: order.id,
+          totalAmount: Number(order.total_amount),
+          currency,
+          items,
+        });
+      }
     }
   } catch (err) {
-    console.error(`Failed to send merchant order alert for order ${orderId}:`, err);
+    console.error(`Failed to send order alerts for order ${orderId}:`, err);
   }
 }
+

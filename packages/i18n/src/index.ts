@@ -55,6 +55,8 @@ export function detectLocale(languageCode?: string): Locale {
 
 const currencyConfig: Record<string, { symbol: string; position: 'prefix' | 'suffix'; decimals: number; groupSep: string; decSep: string }> = {
   USD: { symbol: '$', position: 'prefix', decimals: 2, groupSep: ',', decSep: '.' },
+  EUR: { symbol: '€', position: 'suffix', decimals: 2, groupSep: ' ', decSep: ',' },
+  GBP: { symbol: '£', position: 'prefix', decimals: 2, groupSep: ',', decSep: '.' },
   RUB: { symbol: '₽', position: 'suffix', decimals: 2, groupSep: ' ', decSep: ',' },
   UZS: { symbol: "so'm", position: 'suffix', decimals: 0, groupSep: ' ', decSep: ',' },
 };

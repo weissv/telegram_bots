@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { Check, Zap, Sparkles, Server } from 'lucide-react';
 
+const API_BASE =
+  import.meta.env.VITE_API_URL ??
+  (typeof window !== 'undefined' && window.location.port === '5175'
+    ? 'http://localhost:3000'
+    : '');
+
 export function PricingTable() {
   const [billingLoading, setBillingLoading] = useState<string | null>(null);
 
   const handleSubscribe = async (plan: 'BASIC_20' | 'PRO_30' | 'STANDALONE_LIFETIME') => {
     try {
       setBillingLoading(plan);
-      const res = await fetch('http://localhost:3000/api/v1/billing/checkout', {
+      const res = await fetch(`${API_BASE}/api/v1/billing/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

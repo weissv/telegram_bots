@@ -1,6 +1,6 @@
 import { InlineKeyboard, Keyboard } from 'grammy';
 import { TenantInfo, CartItem } from '../types.js';
-import { getEnv, PLAN_TIERS } from '@telegram-commerce/config';
+import { getEnv, PLAN_TIERS, isSafeTelegramUrl, isHttpsUrl } from '@telegram-commerce/config';
 import { t, type Locale } from '@telegram-commerce/i18n';
 
 /**
@@ -15,7 +15,9 @@ export function getMainMenuKeyboard(tenant: TenantInfo, locale: Locale): Keyboar
 
   if (isProOrStandalone) {
     const webAppUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=${tenant.id}`;
-    keyboard.webApp(t(locale, 'kb.open_store'), webAppUrl).row();
+    if (isHttpsUrl(webAppUrl)) {
+      keyboard.webApp(t(locale, 'kb.open_store'), webAppUrl).row();
+    }
   }
 
   keyboard
@@ -116,6 +118,12 @@ export function getCartInlineKeyboard(cart: CartItem[], currency: string, locale
 export function getUpgradeInlineKeyboard(locale: Locale): InlineKeyboard {
   const env = getEnv();
   const keyboard = new InlineKeyboard();
-  keyboard.url(t(locale, 'webapp.upgrade_btn'), `${env.PUBLIC_LANDING_URL}#pricing`);
+  const landingUrl = `${env.PUBLIC_LANDING_URL}#pricing`;
+  if (isSafeTelegramUrl(landingUrl)) {
+    keyboard.url(t(locale, 'webapp.upgrade_btn'), landingUrl);
+  } else {
+    keyboard.text(t(locale, 'webapp.upgrade_btn'), 'catalog:browse');
+  }
   return keyboard;
 }
+

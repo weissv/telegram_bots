@@ -35,7 +35,10 @@ export function App() {
     setIsAuthenticated(false);
   };
 
-  const storefrontUrl = `http://localhost:5173?tenant_id=${profile?.tenant?.id || 'demo-tenant'}`;
+  const storefrontUrl =
+    typeof window !== 'undefined' && window.location.port === '5174'
+      ? `http://localhost:5173?tenant_id=${profile?.tenant?.id || 'demo-tenant'}`
+      : `${typeof window !== 'undefined' ? window.location.origin : ''}/miniapp/?tenant_id=${profile?.tenant?.id || 'demo-tenant'}`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex">

@@ -31,18 +31,23 @@ export function Hero() {
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           <a
-            href="https://t.me/BotFather"
+            href={import.meta.env.VITE_MASTER_BOT_URL || 'https://t.me/miraiedu_bot'}
             target="_blank"
             rel="noreferrer"
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-sm shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2.5 transition-all active:scale-95"
           >
             <Bot className="w-5 h-5" />
-            <span>Launch Store with Master Bot</span>
+            <span>Launch Store with Master Bot (@miraiedu_bot)</span>
             <ArrowRight className="w-4 h-4" />
           </a>
 
           <a
-            href="http://localhost:5173?tenant_id=demo-tenant"
+            href={
+              import.meta.env.VITE_MINIAPP_URL ??
+              (typeof window !== 'undefined' && window.location.port === '5175'
+                ? 'http://localhost:5173?tenant_id=demo-tenant'
+                : '/miniapp/?tenant_id=demo-tenant')
+            }
             target="_blank"
             rel="noreferrer"
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 hover:text-white font-semibold text-sm border border-slate-800 shadow-xl backdrop-blur flex items-center justify-center gap-2 transition-all active:scale-95"

@@ -45,6 +45,21 @@ async function main() {
       console.error('⚠️ Master Bot startup error:', err);
     }
   }
+
+  // 5. Graceful shutdown handler
+  const shutdown = async (signal: string) => {
+    console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+    try {
+      await server.close();
+      console.log('✅ Fastify server closed cleanly.');
+    } catch (err) {
+      console.error('Error during server close:', err);
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 if (process.env.NODE_ENV !== 'test') {

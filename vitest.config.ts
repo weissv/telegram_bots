@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       '@telegram-commerce/config': path.resolve(__dirname, './packages/config/src/index.ts'),
       '@telegram-commerce/database': path.resolve(__dirname, './packages/database/src/index.ts'),
+      '@telegram-commerce/i18n': path.resolve(__dirname, './packages/i18n/src/index.ts'),
       '@telegram-commerce/payments': path.resolve(__dirname, './packages/payments/src/index.ts'),
       '@telegram-commerce/telegram-engine': path.resolve(__dirname, './packages/telegram-engine/src/index.ts'),
       '@telegram-commerce/ui': path.resolve(__dirname, './packages/ui/src/index.ts'),

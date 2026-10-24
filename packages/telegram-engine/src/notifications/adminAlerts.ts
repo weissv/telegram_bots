@@ -55,6 +55,54 @@ ${itemsList}
   }
 }
 
+export interface CustomerReceiptPayload {
+  orderId: string;
+  totalAmount: number;
+  currency: string;
+  items: Array<{
+    title: string;
+    quantity: number;
+    price: number;
+  }>;
+}
+
+/**
+ * Sends order receipt and confirmation to customer via their bot chat.
+ */
+export async function sendCustomerOrderReceipt(
+  bot: Bot<any>,
+  customerTelegramId: string,
+  receipt: CustomerReceiptPayload
+) {
+  if (!customerTelegramId) return;
+
+  const itemsList = receipt.items
+    .map(
+      (item) =>
+        `  • <b>${escapeHtml(item.title)}</b> × ${item.quantity} — <code>${item.price.toFixed(2)} ${receipt.currency}</code>`
+    )
+    .join('\n');
+
+  const text = `
+✅ <b>ОПЛАТА УСПЕШНО ПОЛУЧЕНА!</b>
+
+🧾 <b>Заказ:</b> <code>#${receipt.orderId.slice(0, 8)}</code>
+💰 <b>Сумма:</b> <b>${receipt.totalAmount.toFixed(2)} ${receipt.currency}</b>
+
+📦 <b>Содержимое заказа:</b>
+${itemsList}
+
+Мерчант уже получил уведомление и собирает ваш заказ.
+Вы можете проверить статус в меню /orders.
+`.trim();
+
+  try {
+    await bot.api.sendMessage(customerTelegramId, text, { parse_mode: 'HTML' });
+  } catch (err) {
+    console.warn(`Customer order receipt send notice for ${customerTelegramId}:`, err);
+  }
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -62,3 +110,4 @@ function escapeHtml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+

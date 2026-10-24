@@ -1,7 +1,7 @@
 import { Bot, session, InlineKeyboard, type Context, type SessionFlavor } from 'grammy';
 import { conversations, createConversation, type ConversationFlavor } from '@grammyjs/conversations';
 import { prisma } from '@telegram-commerce/database';
-import { getEnv } from '@telegram-commerce/config';
+import { getEnv, isHttpsUrl, isSafeTelegramUrl } from '@telegram-commerce/config';
 import { handleSales } from './handlers/sales.js';
 import { handleDemo } from './handlers/demo.js';
 import { onboardingConversation } from './conversations/onboarding.js';
@@ -24,8 +24,16 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   // Direct Catalog / Shop Commands
   bot.command(['catalog', 'shop'], async (ctx) => {
     const env = getEnv();
-    const keyboard = new InlineKeyboard()
-      .webApp('📱 Open Mini App Store', `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`)
+    const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+    const keyboard = new InlineKeyboard();
+
+    if (isHttpsUrl(miniappUrl)) {
+      keyboard.webApp('📱 Open Mini App Store', miniappUrl);
+    } else if (isSafeTelegramUrl(miniappUrl)) {
+      keyboard.url('📱 Open Mini App Store', miniappUrl);
+    }
+
+    keyboard
       .row()
       .text('🛍️ View Demo Products', 'demo:products')
       .row()
@@ -82,8 +90,16 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
         text += `• <b>${p.title}</b> — $${Number(p.price).toFixed(2)}\n<i>${p.description}</i>\n\n`;
       }
 
-      const keyboard = new InlineKeyboard()
-        .webApp('📱 Open Store Mini App', `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`);
+      const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+      const keyboard = new InlineKeyboard();
+
+      if (isHttpsUrl(miniappUrl)) {
+        keyboard.webApp('📱 Open Store Mini App', miniappUrl);
+      } else if (isSafeTelegramUrl(miniappUrl)) {
+        keyboard.url('📱 Open Store Mini App', miniappUrl);
+      } else {
+        keyboard.text('⚡ Launch My Store', 'onboard:start');
+      }
 
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     } catch (err: any) {
@@ -117,11 +133,20 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
       prisma.order.count(),
     ]);
 
-    const keyboard = new InlineKeyboard()
-      .url('💼 Open Merchant Admin Backoffice', env.PUBLIC_ADMIN_URL)
-      .row()
-      .text('🔄 Refresh Metrics', 'admin:refresh')
-      .webApp('📱 Open Store Mini App', `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`);
+    const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+    const keyboard = new InlineKeyboard();
+
+    if (isSafeTelegramUrl(env.PUBLIC_ADMIN_URL)) {
+      keyboard.url('💼 Open Merchant Admin Backoffice', env.PUBLIC_ADMIN_URL);
+    }
+
+    keyboard.row().text('🔄 Refresh Metrics', 'admin:refresh');
+
+    if (isHttpsUrl(miniappUrl)) {
+      keyboard.webApp('📱 Open Store Mini App', miniappUrl);
+    } else if (isSafeTelegramUrl(miniappUrl)) {
+      keyboard.url('📱 Open Store Mini App', miniappUrl);
+    }
 
     const text = `
 👑 <b>Platform Superadmin Control Center</b>

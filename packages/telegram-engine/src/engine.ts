@@ -191,6 +191,26 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
       return;
     }
 
+    if (data.startsWith('order:pay:')) {
+      const orderId = data.substring(10);
+      try {
+        await ctx.db.order.update({
+          where: { id: orderId },
+          data: { status: 'PAID' as any, payment_id: 'instant_demo_pay' },
+        });
+        await ctx.answerCallbackQuery({ text: '✅ Оплата успешно подтверждена!' });
+        await ctx.reply(
+          `🎉 <b>Заказ #${orderId.slice(0, 8)} успешно оплачен!</b>\n\n` +
+          `Мерчант уведомлен и собирает заказ.\n` +
+          `Используйте команду /orders для просмотра деталей.`,
+          { parse_mode: 'HTML' }
+        );
+      } catch (err: any) {
+        await ctx.answerCallbackQuery({ text: `Ошибка: ${err?.message || 'Не удалось обновить заказ'}`, show_alert: true });
+      }
+      return;
+    }
+
     await ctx.answerCallbackQuery();
   });
 
