@@ -1,6 +1,7 @@
 import { createServer } from './server.js';
 import { getEnv } from '@telegram-commerce/config';
 import { initBillingWorker } from './services/billingWorker.js';
+import { initReservationWorker } from './services/reservationWorker.js';
 import { ensureDatabaseSeeded } from './services/seedService.js';
 
 async function main() {
@@ -11,13 +12,19 @@ async function main() {
 
   const server = await createServer();
 
-  // 2. Initialize BullMQ worker if in SaaS mode
+  // 2. Initialize BullMQ workers
+  try {
+    await initReservationWorker();
+  } catch (err) {
+    console.warn('⚠️ BullMQ reservation worker init skipped or Redis offline:', err);
+  }
+
   if (env.MODE === 'saas') {
     try {
       await initBillingWorker();
       console.log('⚡ BullMQ recurring billing worker initialized');
     } catch (err) {
-      console.warn('⚠️ BullMQ worker init skipped or Redis offline:', err);
+      console.warn('⚠️ BullMQ billing worker init skipped or Redis offline:', err);
     }
   }
 

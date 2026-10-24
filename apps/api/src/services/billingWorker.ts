@@ -22,6 +22,8 @@ export async function initBillingWorker() {
   const connection = {
     host: redis.options.host || 'localhost',
     port: redis.options.port || 6379,
+    password: redis.options.password,
+    username: redis.options.username,
   };
 
   billingQueue = new Queue(QUEUE_NAME, { connection });
