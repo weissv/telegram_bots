@@ -28,22 +28,93 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     const keyboard = new InlineKeyboard();
 
     if (isHttpsUrl(miniappUrl)) {
-      keyboard.webApp('📱 Open Mini App Store', miniappUrl);
+      keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
     } else if (isSafeTelegramUrl(miniappUrl)) {
-      keyboard.url('📱 Open Mini App Store', miniappUrl);
+      keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
     }
 
     keyboard
       .row()
-      .text('🛍️ View Demo Products', 'demo:products')
+      .text('🛍️ Товары в чате', 'demo:products')
       .row()
-      .text('⚡ Launch My Store', 'onboard:start');
+      .text('⚡ Запустить свой магазин', 'onboard:start');
 
     await ctx.reply(
-      `🛍️ <b>Demo Storefront — Cyberpunk Apparel & Gear</b>\n\n` +
-      `Test out the customer purchasing experience: browse the live catalog, add items to cart, and checkout.\n\n` +
-      `👇 Tap below to launch the Telegram Mini App or view items:`,
+      `🛍️ <b>Mirai Shop • Telegram Commerce</b>\n\n` +
+      `Откройте витрину интернет-магазина в один клик. Полноэкранный Telegram Mini App, каталог, быстрый поиск и моментальный чекаут!\n\n` +
+      `👇 Нажмите кнопку ниже для запуска витрины:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
+    );
+  });
+
+  // Cart command
+  bot.command('cart', async (ctx) => {
+    const env = getEnv();
+    const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+    const keyboard = new InlineKeyboard();
+    if (isHttpsUrl(miniappUrl)) {
+      keyboard.webApp('🛒 Открыть корзину в Mini App', miniappUrl);
+    } else if (isSafeTelegramUrl(miniappUrl)) {
+      keyboard.url('🛒 Открыть корзину в Mini App', miniappUrl);
+    }
+
+    await ctx.reply(
+      `🛒 <b>Ваша корзина</b>\n\n` +
+      `Управляйте выбранными товарами, изменяйте количество и оформляйте заказ в Telegram Mini App.\n\n` +
+      `👇 Нажмите кнопку ниже, чтобы открыть корзину:`,
+      { parse_mode: 'HTML', reply_markup: keyboard }
+    );
+  });
+
+  // Orders inquiry
+  bot.command('orders', async (ctx) => {
+    const userId = String(ctx.from?.id);
+    try {
+      const orders = await prisma.order.findMany({
+        where: { customer_telegram_id: userId },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (orders.length === 0) {
+        const env = getEnv();
+        const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+        const keyboard = new InlineKeyboard();
+        if (isHttpsUrl(miniappUrl)) {
+          keyboard.webApp('🛍️ Открыть каталог', miniappUrl);
+        }
+
+        await ctx.reply(
+          `📦 <b>История заказов</b>\n\nУ вас пока нет оформленных заказов. Перейдите в каталог, чтобы сделать свой первый заказ!`,
+          { parse_mode: 'HTML', reply_markup: keyboard }
+        );
+        return;
+      }
+
+      let text = `📦 <b>Ваши последние заказы:</b>\n\n`;
+      for (const ord of orders) {
+        const statusEmoji = ord.status === 'PAID' ? '✅ Оплачен' : ord.status === 'PENDING' ? '⏳ Ожидает оплаты' : '❌ Отменен';
+        text += `• <b>Заказ #${ord.id.slice(0, 8)}</b> — $${Number(ord.total_amount).toFixed(2)}\n  Статус: ${statusEmoji}\n  Дата: ${new Date(ord.createdAt).toLocaleDateString()}\n\n`;
+      }
+
+      await ctx.reply(text, { parse_mode: 'HTML' });
+    } catch (err: any) {
+      await ctx.reply(`⚠️ Ошибка загрузки заказов: ${err?.message}`);
+    }
+  });
+
+  // Help command
+  bot.command('help', async (ctx) => {
+    await ctx.reply(
+      `ℹ️ <b>Навигация по Mirai Shop</b>\n\n` +
+      `• /start — Главное меню и информация о магазине\n` +
+      `• /catalog — Полноэкранный Telegram Mini App с каталогом\n` +
+      `• /cart — Корзина и оформление заказа\n` +
+      `• /orders — История и статусы ваших заказов\n` +
+      `• /demo — Интерактивное демо и витрина для бизнеса\n` +
+      `• /newstore — Мастер создания собственного магазина\n\n` +
+      `💬 По вопросам поддержки: обратитесь к администратору магазина.`,
+      { parse_mode: 'HTML' }
     );
   });
 

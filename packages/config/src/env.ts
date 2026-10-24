@@ -14,10 +14,10 @@ export const envSchema = z.object({
 
   MASTER_BOT_TOKEN: z.string().optional(),
 
-  PUBLIC_API_URL: z.string().default('http://localhost:3000'),
-  PUBLIC_MINIAPP_URL: z.string().default('http://localhost:5173'),
-  PUBLIC_ADMIN_URL: z.string().default('http://localhost:5174'),
-  PUBLIC_LANDING_URL: z.string().default('http://localhost:5175'),
+  PUBLIC_API_URL: z.string().default('https://mirai-edu.space'),
+  PUBLIC_MINIAPP_URL: z.string().default('https://mirai-edu.space/miniapp'),
+  PUBLIC_ADMIN_URL: z.string().default('https://mirai-edu.space/admin'),
+  PUBLIC_LANDING_URL: z.string().default('https://mirai-edu.space'),
 
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
@@ -50,17 +50,17 @@ export function getEnv(): AppEnv {
   if (!parsedEnv) {
     const rawEnv: Record<string, any> = {
       ...process.env,
-      MASTER_BOT_TOKEN: process.env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0',
+      MASTER_BOT_TOKEN: process.env.MASTER_BOT_TOKEN || '8524216143:AAFi3TAXiGquIOCtDZA-aqXWlEklV8By7QU',
       STANDALONE_ADMIN_TELEGRAM_ID: process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731',
       PUBLIC_MINIAPP_URL:
         process.env.PUBLIC_MINIAPP_URL ||
-        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/miniapp` : 'http://localhost:5173'),
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/miniapp` : 'https://mirai-edu.space/miniapp'),
       PUBLIC_ADMIN_URL:
         process.env.PUBLIC_ADMIN_URL ||
-        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/admin` : 'http://localhost:5174'),
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/admin` : 'https://mirai-edu.space/admin'),
       PUBLIC_LANDING_URL:
         process.env.PUBLIC_LANDING_URL ||
-        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}` : 'http://localhost:5175'),
+        (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}` : 'https://mirai-edu.space'),
     };
 
     const result = envSchema.safeParse(rawEnv);
