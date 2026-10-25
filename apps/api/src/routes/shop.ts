@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { prisma, getTenantDb } from '@telegram-commerce/database';
 import { tenantContextMiddleware } from '../middleware/tenantContext.js';
-import { createCheckoutOrder, fulfillOrder } from '../services/orderService.js';
+import { createCheckoutOrder, fulfillOrder, confirmPaynetPayment } from '../services/orderService.js';
 import { getTenantBotData } from '../services/botManager.js';
 import { DEFAULT_THEME_CONFIG } from '@telegram-commerce/config';
 
@@ -129,7 +129,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
       customerPhone?: string;
       shippingAddress?: string;
       items: Array<{ productId: string; quantity: number }>;
-      paymentMethod?: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
+      paymentMethod?: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS' | 'PAYNET_XOLIS';
       successUrl?: string;
       cancelUrl?: string;
     };
@@ -157,6 +157,19 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({
         error: err.message || 'Checkout failed due to insufficient stock or invalid request',
       });
+    }
+  });
+
+  // Paynet Xolis payment confirmation by customer
+  fastify.post<{
+    Params: { id: string };
+  }>('/api/v1/shop/orders/:id/confirm-paynet', { preHandler: [tenantContextMiddleware] }, async (req, reply) => {
+    try {
+      const result = await confirmPaynetPayment(req.params.id);
+      return reply.send(result);
+    } catch (err: any) {
+      req.log.error(err, 'Paynet confirmation failed');
+      return reply.status(400).send({ error: err.message || 'Paynet payment confirmation failed' });
     }
   });
 

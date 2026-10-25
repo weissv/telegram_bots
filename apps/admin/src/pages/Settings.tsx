@@ -1,15 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client.js';
-import { Bot, Save, Key, ShieldCheck, Palette, Store, CheckCircle } from 'lucide-react';
+import { Bot, Save, Key, ShieldCheck, Palette, Store, CheckCircle, QrCode, ExternalLink } from 'lucide-react';
+
+const DEFAULT_PAYNET_LINK =
+  'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
 
 export function Settings() {
   const [storeName, setStoreName] = useState('');
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState('UZS');
   const [ownerTelegramId, setOwnerTelegramId] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#1a6fd4');
   const [bannerUrl, setBannerUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [description, setDescription] = useState('');
+
+  // Paynet Xolis (0% for Self-Employed)
+  const [paynetEnabled, setPaynetEnabled] = useState(true);
+  const [paynetQrUrl, setPaynetQrUrl] = useState(DEFAULT_PAYNET_LINK);
 
   // Bot Token state
   const [botUsername, setBotUsername] = useState('');
@@ -33,6 +40,8 @@ export function Settings() {
               bannerUrl?: string;
               logoUrl?: string;
               description?: string;
+              paynetEnabled?: boolean;
+              paynetQrUrl?: string;
             };
           };
         }>('/api/v1/admin/settings');
@@ -43,12 +52,14 @@ export function Settings() {
         }
         if (data.botConfig) {
           setBotUsername(data.botConfig.botUsername || '');
-          setCurrency(data.botConfig.currency || 'USD');
+          setCurrency(data.botConfig.currency || 'UZS');
           const tc = data.botConfig.themeConfig || {};
           setPrimaryColor(tc.primaryColor || '#1a6fd4');
           setBannerUrl(tc.bannerUrl || '');
           setLogoUrl(tc.logoUrl || '');
           setDescription(tc.description || '');
+          setPaynetEnabled(tc.paynetEnabled !== undefined ? tc.paynetEnabled : true);
+          setPaynetQrUrl(tc.paynetQrUrl || DEFAULT_PAYNET_LINK);
         }
       } catch (err: any) {
         console.error('Failed to load settings:', err);
@@ -75,6 +86,8 @@ export function Settings() {
             bannerUrl,
             logoUrl,
             description,
+            paynetEnabled,
+            paynetQrUrl,
           },
         }),
       });
@@ -214,6 +227,62 @@ export function Settings() {
               placeholder="Официальный магазин одежды и обуви с доставкой."
               className="w-full rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-ink"
             />
+          </div>
+        </section>
+
+        {/* Payment Systems: Paynet Xolis for Self-Employed */}
+        <section className="rounded-md border border-line bg-paper p-5 space-y-4">
+          <div className="border-b border-line pb-3 flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2>Оплата Paynet Xolis (0% комиссия)</h2>
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                  Для самозанятых РУз
+                </span>
+              </div>
+              <p className="hint">
+                Приём платежей по государственной системе QR-Online (Soliq / ЦБ РУз). 0% комиссии с продаж, прямое зачисление в приложение Paynet.
+              </p>
+            </div>
+            <QrCode className="w-5 h-5 text-muted shrink-0" />
+          </div>
+
+          <div className="space-y-3">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={paynetEnabled}
+                onChange={(e) => setPaynetEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-line text-ink focus:ring-0"
+              />
+              <span className="text-sm font-medium">
+                Активировать Paynet Xolis в корзине витрины и Telegram-боте
+              </span>
+            </label>
+
+            <div>
+              <label className="label">Ссылка или EMVCo QR-код мерчанта Paynet</label>
+              <input
+                type="text"
+                value={paynetQrUrl}
+                onChange={(e) => setPaynetQrUrl(e.target.value)}
+                placeholder="https://app.paynet.uz/qr-online/..."
+                className="input font-mono text-xs"
+              />
+              <div className="hint mt-1.5 flex items-center justify-between">
+                <span>Скопируйте вашу персональную ссылку из приложения Paynet Бизнес (раздел «QR-online / Холис»).</span>
+                {paynetQrUrl && (
+                  <a
+                    href={paynetQrUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-0.5 font-medium ml-2 shrink-0"
+                  >
+                    Тест ссылки <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="pt-2">

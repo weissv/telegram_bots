@@ -1,6 +1,6 @@
 import { prisma } from '@telegram-commerce/database';
 import { createOrderCheckoutSession, createMockPaymentSession, PaymentSessionResult } from '@telegram-commerce/payments';
-import { getEnv, ORDER_STATUS } from '@telegram-commerce/config';
+import { getEnv, ORDER_STATUS, DEFAULT_PAYNET_QR_URL, PAYMENT_METHODS } from '@telegram-commerce/config';
 import { sendMerchantOrderAlert, sendCustomerOrderReceipt } from '@telegram-commerce/telegram-engine';
 import { getOrInitBot, getTenantBotData } from './botManager.js';
 import { enqueueReservationExpiry, cancelReservationExpiry } from './reservationWorker.js';
@@ -17,7 +17,7 @@ export interface CheckoutParams {
   customerPhone?: string;
   shippingAddress?: string;
   items: CheckoutOrderItem[];
-  paymentMethod?: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
+  paymentMethod?: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS' | 'PAYNET_XOLIS';
   successUrl?: string;
   cancelUrl?: string;
 }
@@ -27,6 +27,7 @@ export interface CheckoutResult {
   totalAmount: number;
   currency: string;
   payment: PaymentSessionResult;
+  paynetQrUrl?: string;
 }
 
 /**
@@ -135,8 +136,20 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
   const defaultCancelUrl = params.cancelUrl || `${env.PUBLIC_API_URL}/api/v1/shop/orders/${order.id}/cancel`;
 
   let paymentResult: PaymentSessionResult;
+  let paynetQrUrl: string | undefined;
 
-  if (paymentMethod === 'STRIPE' && env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.includes('placeholder')) {
+  if (paymentMethod === 'PAYNET_XOLIS') {
+    const rawQr =
+      (tenantData.tenant.themeConfig as any)?.paynetQrUrl ||
+      DEFAULT_PAYNET_QR_URL;
+    paynetQrUrl = String(rawQr);
+
+    paymentResult = {
+      sessionId: `paynet_${order.id}`,
+      paymentUrl: paynetQrUrl,
+      provider: 'paynet',
+    };
+  } else if (paymentMethod === 'STRIPE' && env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.includes('placeholder')) {
     try {
       paymentResult = await createOrderCheckoutSession({
         orderId: order.id,
@@ -175,6 +188,7 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
     totalAmount: order.totalAmount,
     currency,
     payment: paymentResult,
+    paynetQrUrl,
   };
 }
 
@@ -235,5 +249,67 @@ export async function fulfillOrder(orderId: string, paymentId?: string): Promise
   } catch (err) {
     console.error(`Failed to send order alerts for order ${orderId}:`, err);
   }
+}
+
+/**
+ * Handles customer's "I Paid via Paynet" confirmation.
+ * Marks the order as PAID and alerts merchant via Telegram.
+ */
+export async function confirmPaynetPayment(orderId: string): Promise<{ success: boolean; order: any }> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { tenant: { include: { botConfig: true } } },
+  });
+
+  if (!order) {
+    throw new Error('Order not found');
+  }
+
+  // Cancel reservation timer
+  await cancelReservationExpiry(orderId);
+
+  // Fulfill order
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: ORDER_STATUS.PAID as any,
+      payment_id: `paynet_${Date.now()}`,
+    },
+  });
+
+  // Notify merchant and customer
+  try {
+    const botData = await getOrInitBot(order.tenant_id);
+    if (botData) {
+      const items = Array.isArray(order.items) ? (order.items as any[]) : [];
+      const currency = order.tenant.botConfig?.currency || 'UZS';
+
+      if (order.tenant.owner_telegram_id) {
+        await sendMerchantOrderAlert(botData.bot, order.tenant.owner_telegram_id, {
+          orderId: order.id,
+          totalAmount: Number(order.total_amount),
+          currency,
+          customerTelegramId: order.customer_telegram_id,
+          customerName: order.customer_name || undefined,
+          customerPhone: order.customer_phone || undefined,
+          shippingAddress: order.shipping_address || undefined,
+          items,
+        });
+      }
+
+      if (order.customer_telegram_id && /^\d+$/.test(order.customer_telegram_id)) {
+        await sendCustomerOrderReceipt(botData.bot, order.customer_telegram_id, {
+          orderId: order.id,
+          totalAmount: Number(order.total_amount),
+          currency,
+          items,
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to send order alert for Paynet order ${orderId}:`, err);
+  }
+
+  return { success: true, order: updatedOrder };
 }
 

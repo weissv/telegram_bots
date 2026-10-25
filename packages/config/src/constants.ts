@@ -48,6 +48,18 @@ export const ORDER_STATUS = {
 
 export type OrderStatus = keyof typeof ORDER_STATUS;
 
+export const PAYMENT_METHODS = {
+  PAYNET_XOLIS: 'PAYNET_XOLIS',
+  TELEGRAM_STARS: 'TELEGRAM_STARS',
+  STRIPE: 'STRIPE',
+  MOCK: 'MOCK',
+} as const;
+
+export type PaymentMethod = keyof typeof PAYMENT_METHODS;
+
+export const DEFAULT_PAYNET_QR_URL =
+  'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
+
 export const DEFAULT_THEME_CONFIG = {
   primaryColor: '#0ea5e9', // Sky blue default
   accentColor: '#38bdf8',
@@ -59,6 +71,8 @@ export const DEFAULT_THEME_CONFIG = {
   description: 'Welcome to our premium Telegram storefront. Instant checkout & seamless shopping.',
   currency: 'USD',
   currencySymbol: '$',
+  paynetEnabled: true,
+  paynetQrUrl: DEFAULT_PAYNET_QR_URL,
 };
 
 export const SUBSCRIPTION_GRACE_PERIOD_DAYS = 3;

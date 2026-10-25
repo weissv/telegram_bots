@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { prisma, getTenantDb } from '@telegram-commerce/database';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
-import { encryptBotToken, generateWebhookSecret, getEnv, ORDER_STATUS } from '@telegram-commerce/config';
+import { encryptBotToken, generateWebhookSecret, getEnv, ORDER_STATUS, DEFAULT_THEME_CONFIG } from '@telegram-commerce/config';
 import { invalidateTenantBot } from '../services/botManager.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
@@ -266,6 +266,134 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ success: true });
     });
 
+    // Bulk Products Import / Upsert
+    adminProtected.post<{
+      Body: {
+        products: Array<{
+          id?: string;
+          title: string;
+          description?: string;
+          price: number;
+          stock?: number;
+          images?: string[];
+          category?: string;
+          isActive?: boolean;
+        }>;
+        upsert?: boolean;
+      };
+    }>('/api/v1/admin/products/bulk', async (req, reply) => {
+      const tenantId = req.tenantId;
+      const { products, upsert = true } = req.body;
+
+      if (!Array.isArray(products) || products.length === 0) {
+        return reply.status(400).send({ error: 'Products array is required and cannot be empty' });
+      }
+
+      let created = 0;
+      let updated = 0;
+
+      await prisma.$transaction(async (tx) => {
+        for (const item of products) {
+          if (!item.title || item.price === undefined || item.price === null || isNaN(Number(item.price))) {
+            continue;
+          }
+
+          const priceVal = Number(item.price);
+          const stockVal = item.stock !== undefined ? Math.max(0, parseInt(String(item.stock), 10) || 0) : 0;
+          const categoryVal = (item.category && item.category.trim()) || 'Общее';
+          const descriptionVal = item.description || '';
+          const imagesVal = Array.isArray(item.images) ? item.images : [];
+          const isActiveVal = item.isActive !== undefined ? Boolean(item.isActive) : true;
+
+          if (upsert && item.id) {
+            const existing = await tx.product.findFirst({
+              where: { id: item.id, tenant_id: tenantId },
+            });
+
+            if (existing) {
+              await tx.product.update({
+                where: { id: existing.id },
+                data: {
+                  title: item.title.trim(),
+                  description: descriptionVal,
+                  price: priceVal as any,
+                  stock: stockVal,
+                  category: categoryVal,
+                  images: imagesVal,
+                  is_active: isActiveVal,
+                },
+              });
+              updated++;
+              continue;
+            }
+          }
+
+          await tx.product.create({
+            data: {
+              tenant_id: tenantId,
+              title: item.title.trim(),
+              description: descriptionVal,
+              price: priceVal as any,
+              stock: stockVal,
+              category: categoryVal,
+              images: imagesVal,
+              is_active: isActiveVal,
+            },
+          });
+          created++;
+        }
+      });
+
+      return reply.send({
+        success: true,
+        created,
+        updated,
+        total: created + updated,
+      });
+    });
+
+    // Bulk Status Toggle
+    adminProtected.post<{
+      Body: {
+        productIds: string[];
+        isActive: boolean;
+      };
+    }>('/api/v1/admin/products/bulk-status', async (req, reply) => {
+      const tenantDb = getTenantDb(req.tenantId);
+      const { productIds, isActive } = req.body;
+
+      if (!Array.isArray(productIds) || productIds.length === 0) {
+        return reply.status(400).send({ error: 'productIds array is required' });
+      }
+
+      const res = await tenantDb.product.updateMany({
+        where: { id: { in: productIds } },
+        data: { is_active: Boolean(isActive) },
+      });
+
+      return reply.send({ success: true, count: res.count });
+    });
+
+    // Bulk Delete
+    adminProtected.post<{
+      Body: {
+        productIds: string[];
+      };
+    }>('/api/v1/admin/products/bulk-delete', async (req, reply) => {
+      const tenantDb = getTenantDb(req.tenantId);
+      const { productIds } = req.body;
+
+      if (!Array.isArray(productIds) || productIds.length === 0) {
+        return reply.status(400).send({ error: 'productIds array is required' });
+      }
+
+      const res = await tenantDb.product.deleteMany({
+        where: { id: { in: productIds } },
+      });
+
+      return reply.send({ success: true, count: res.count });
+    });
+
     // Orders List & Status Update
     adminProtected.get('/api/v1/admin/orders', async (req, reply) => {
       const tenantDb = getTenantDb(req.tenantId);
@@ -300,12 +428,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: req.tenantId },
       });
 
+      const mergedTheme = {
+        ...DEFAULT_THEME_CONFIG,
+        ...((botConfig?.theme_config as any) || {}),
+      };
+
       return reply.send({
         tenant,
         botConfig: {
           botUsername: botConfig?.bot_username,
           currency: botConfig?.currency,
-          themeConfig: botConfig?.theme_config,
+          themeConfig: mergedTheme,
         },
       });
     });

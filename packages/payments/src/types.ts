@@ -13,7 +13,7 @@ export interface PaymentSessionOptions {
 export interface PaymentSessionResult {
   sessionId: string;
   paymentUrl: string;
-  provider: 'stripe' | 'telegram_stars' | 'mock' | 'payme' | 'click';
+  provider: 'stripe' | 'telegram_stars' | 'mock' | 'payme' | 'click' | 'paynet';
 }
 
 export interface SubscriptionCheckoutOptions {

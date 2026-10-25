@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CreditCard, Star } from 'lucide-react';
+import { X, CreditCard, Star, QrCode } from 'lucide-react';
 import { CartItem } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -10,11 +10,12 @@ interface CheckoutModalProps {
   currency: string;
   totalAmount: number;
   initialTelegramUser: any;
+  paynetEnabled?: boolean;
   onConfirmOrder: (orderDetails: {
     customerName: string;
     customerPhone: string;
     shippingAddress: string;
-    paymentMethod: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
+    paymentMethod: 'PAYNET_XOLIS' | 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
   }) => Promise<void>;
   isProcessing: boolean;
 }
@@ -26,6 +27,7 @@ export function CheckoutModal({
   currency,
   totalAmount,
   initialTelegramUser,
+  paynetEnabled = true,
   onConfirmOrder,
   isProcessing,
 }: CheckoutModalProps) {
@@ -41,7 +43,7 @@ export function CheckoutModal({
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'STRIPE' | 'MOCK' | 'TELEGRAM_STARS'>('MOCK');
+  const [paymentMethod, setPaymentMethod] = useState<'PAYNET_XOLIS' | 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS'>('PAYNET_XOLIS');
 
   if (!isOpen) return null;
 
@@ -155,6 +157,37 @@ export function CheckoutModal({
             </div>
 
             <div className="space-y-1.5">
+              {paynetEnabled && (
+                <label
+                  onClick={() => setPaymentMethod('PAYNET_XOLIS')}
+                  className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                    paymentMethod === 'PAYNET_XOLIS'
+                      ? 'border-emerald-500 bg-emerald-500/10'
+                      : 'border-[var(--c-separator)] bg-[var(--c-section)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-4 h-4 rounded-full border border-emerald-500 flex items-center justify-center">
+                      {paymentMethod === 'PAYNET_XOLIS' && (
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1.5">
+                        <QrCode className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{t('checkout.pay_paynet_title')}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-500/15 text-emerald-600 rounded">
+                          0%
+                        </span>
+                      </div>
+                      <div className="text-xs text-[var(--c-hint)]">
+                        {t('checkout.pay_paynet_desc')}
+                      </div>
+                    </div>
+                  </div>
+                </label>
+              )}
+
               <label
                 onClick={() => setPaymentMethod('MOCK')}
                 className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${

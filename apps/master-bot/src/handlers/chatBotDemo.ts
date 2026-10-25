@@ -1,6 +1,6 @@
 import { InlineKeyboard, type Context, InputFile } from 'grammy';
 import { prisma } from '@telegram-commerce/database';
-import { getEnv, isHttpsUrl, isSafeTelegramUrl } from '@telegram-commerce/config';
+import { getEnv, isHttpsUrl, isSafeTelegramUrl, DEFAULT_PAYNET_QR_URL } from '@telegram-commerce/config';
 
 interface DemoCartItem {
   id: string;
@@ -302,8 +302,13 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
 
   const env = getEnv();
   const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
+  const paynetUrl = DEFAULT_PAYNET_QR_URL;
   const keyboard = new InlineKeyboard();
 
+  // Paynet direct link button
+  keyboard.url('⚡ Оплатить в Paynet (0% комиссия)', paynetUrl);
+
+  keyboard.row();
   if (isHttpsUrl(miniappUrl)) {
     keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
   } else {
@@ -323,7 +328,10 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
 💰 <b>Сумма:</b> <b>${formatPrice(totalAmount)}</b>
 📦 <b>Товаров:</b> ${itemsCount} шт.
 🚚 <b>Доставка:</b> Курьером по Ташкенту (в течение 3 часов)
-💳 <b>Оплата:</b> Наличными или через Click / Payme при получении
+💳 <b>Оплата:</b> Paynet Xolis (0% комиссия) или при получении
+
+⚡ <b>Оплата для самозанятых через Paynet Xolis:</b>
+Нажмите кнопку «⚡ Оплатить в Paynet» ниже — откроется государственная система QR-Online (Soliq) с переводом без комиссии мерчанту.
 
 🔔 <i>Мерчант магазина уже получил мгновенное уведомление в Telegram с составом вашего заказа!</i>
 

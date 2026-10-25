@@ -26,6 +26,8 @@ export interface StoreTheme {
   description?: string;
   currency?: string;
   currencySymbol?: string;
+  paynetEnabled?: boolean;
+  paynetQrUrl?: string;
 }
 
 export interface ShopBootstrap {

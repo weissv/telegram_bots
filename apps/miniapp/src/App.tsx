@@ -7,6 +7,7 @@ import { ProductCard } from './components/ProductCard.js';
 import { ProductModal } from './components/ProductModal.js';
 import { CartDrawer } from './components/CartDrawer.js';
 import { CheckoutModal } from './components/CheckoutModal.js';
+import { PaynetPaymentModal } from './components/PaynetPaymentModal.js';
 import { OrderSuccessModal } from './components/OrderSuccessModal.js';
 import { Product, ShopBootstrap, StoreTheme } from './types/index.js';
 import { Store, AlertCircle, ShoppingBag } from 'lucide-react';
@@ -40,6 +41,13 @@ function AppContent() {
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState<boolean>(false);
+  const [paynetPayment, setPaynetPayment] = useState<{
+    orderId: string;
+    totalAmount: number;
+    paynetQrUrl: string;
+    itemsCount: number;
+  } | null>(null);
+  const [isConfirmingPaynet, setIsConfirmingPaynet] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<{
     orderId: string;
     totalAmount: number;
@@ -207,7 +215,7 @@ function AppContent() {
     customerName: string;
     customerPhone: string;
     shippingAddress: string;
-    paymentMethod: 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
+    paymentMethod: 'PAYNET_XOLIS' | 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS';
   }) => {
     try {
       setIsProcessingCheckout(true);
@@ -246,7 +254,20 @@ function AppContent() {
       clearCart();
       setIsCheckoutOpen(false);
 
-      if (data.payment?.paymentUrl && details.paymentMethod === 'STRIPE') {
+      if (details.paymentMethod === 'PAYNET_XOLIS') {
+        const paynetLink =
+          data.paynetQrUrl ||
+          data.payment?.paymentUrl ||
+          theme.paynetQrUrl ||
+          'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
+
+        setPaynetPayment({
+          orderId: data.orderId || 'NEW',
+          totalAmount: boughtAmount,
+          paynetQrUrl: paynetLink,
+          itemsCount: boughtCount,
+        });
+      } else if (data.payment?.paymentUrl && details.paymentMethod === 'STRIPE') {
         window.location.href = data.payment.paymentUrl;
       } else {
         setOrderSuccess({
@@ -260,6 +281,36 @@ function AppContent() {
       alert(`Ошибка заказа: ${err.message}`);
     } finally {
       setIsProcessingCheckout(false);
+    }
+  };
+
+  const handleConfirmPaynetPaid = async () => {
+    if (!paynetPayment) return;
+
+    try {
+      setIsConfirmingPaynet(true);
+      haptic.notification('success');
+
+      await fetch(`${API_BASE}/api/v1/shop/orders/${paynetPayment.orderId}/confirm-paynet?tenant_id=${tenantId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
+        },
+      });
+
+      const saved = { ...paynetPayment };
+      setPaynetPayment(null);
+      setOrderSuccess({
+        orderId: saved.orderId,
+        totalAmount: saved.totalAmount,
+        itemsCount: saved.itemsCount,
+      });
+    } catch (err: any) {
+      haptic.notification('error');
+      alert(`Ошибка подтверждения: ${err.message}`);
+    } finally {
+      setIsConfirmingPaynet(false);
     }
   };
 
@@ -459,9 +510,24 @@ function AppContent() {
         currency={theme.currency || 'UZS'}
         totalAmount={totalAmount}
         initialTelegramUser={user}
+        paynetEnabled={theme.paynetEnabled !== false}
         onConfirmOrder={handleConfirmOrder}
         isProcessing={isProcessingCheckout}
       />
+
+      {/* Paynet Xolis Modal */}
+      {paynetPayment && (
+        <PaynetPaymentModal
+          isOpen={Boolean(paynetPayment)}
+          orderId={paynetPayment.orderId}
+          totalAmount={paynetPayment.totalAmount}
+          currency={theme.currency || 'UZS'}
+          paynetQrUrl={paynetPayment.paynetQrUrl}
+          onConfirmPaid={handleConfirmPaynetPaid}
+          onClose={() => setPaynetPayment(null)}
+          isConfirming={isConfirmingPaynet}
+        />
+      )}
 
       {/* Order Success Modal */}
       <OrderSuccessModal

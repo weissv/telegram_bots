@@ -74,7 +74,19 @@ export function OrdersTable({ orders, currency, onSelect }: OrdersTableProps) {
                 <div className="text-muted">ID {order.customer_telegram_id}</div>
               </td>
               <td>{formatMoney(Number(order.total_amount), currency)}</td>
-              <td>{order.payment_method || '—'}</td>
+              <td>
+                {order.payment_method === 'PAYNET_XOLIS' ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800">
+                    Paynet Xolis (0%)
+                  </span>
+                ) : order.payment_method === 'TELEGRAM_STARS' ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-800">
+                    Stars ⭐
+                  </span>
+                ) : (
+                  <span className="text-muted text-xs">{order.payment_method || '—'}</span>
+                )}
+              </td>
               <td>
                 <OrderStatusLabel status={order.status} />
               </td>
