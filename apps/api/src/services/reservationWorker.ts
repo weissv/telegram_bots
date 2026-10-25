@@ -71,7 +71,7 @@ export async function enqueueReservationExpiry(data: ReservationJobData): Promis
       delay: RESERVATION_TTL_MS,
       removeOnComplete: true,
       removeOnFail: { count: 100 },
-      jobId: `reservation:${data.orderId}`,
+      jobId: `reservation-${data.orderId}`,
     }
   );
 }
@@ -83,7 +83,7 @@ export async function cancelReservationExpiry(orderId: string): Promise<void> {
   if (!reservationQueue) return;
 
   try {
-    const job = await reservationQueue.getJob(`reservation:${orderId}`);
+    const job = await reservationQueue.getJob(`reservation-${orderId}`);
     if (job) {
       const state = await job.getState();
       if (state === 'delayed' || state === 'waiting') {

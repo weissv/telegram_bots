@@ -163,6 +163,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
   // Paynet Xolis payment confirmation by customer
   fastify.post<{
     Params: { id: string };
+    Body?: Record<string, any>;
   }>('/api/v1/shop/orders/:id/confirm-paynet', { preHandler: [tenantContextMiddleware] }, async (req, reply) => {
     try {
       const result = await confirmPaynetPayment(req.params.id);

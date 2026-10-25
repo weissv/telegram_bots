@@ -297,6 +297,7 @@ function AppContent() {
           'Content-Type': 'application/json',
           ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
         },
+        body: JSON.stringify({}),
       });
 
       const saved = { ...paynetPayment };
