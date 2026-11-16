@@ -43,7 +43,7 @@ export async function getTenantBotData(tenantId: string): Promise<TenantBotData 
       name: tenant.name,
       plan: tenant.plan as any,
       ownerTelegramId: tenant.owner_telegram_id,
-      currency: tenant.botConfig.currency || 'USD',
+      currency: tenant.botConfig.currency || 'UZS',
       themeConfig: (tenant.botConfig.theme_config as any) || {},
     },
     encryptedToken: tenant.botConfig.bot_token_encrypted,
@@ -77,6 +77,7 @@ export async function getOrInitBot(tenantId: string): Promise<{ bot: Bot<BotCont
   const bot = createTenantBot({
     tenant: data.tenant,
     botToken: decryptedToken,
+    redisUrl: getEnv().REDIS_URL,
   });
 
   botInstances.set(tenantId, { bot, token: decryptedToken });

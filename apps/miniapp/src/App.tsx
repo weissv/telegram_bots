@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTelegram } from './hooks/useTelegram.js';
 import { useCart } from './hooks/useCart.js';
-import { I18nProvider, useI18n } from './i18n/useI18n.js';
+import { I18nProvider, useI18n, translateCategory } from './i18n/useI18n.js';
 import { Header } from './components/Header.js';
 import { ProductCard } from './components/ProductCard.js';
 import { ProductModal } from './components/ProductModal.js';
@@ -48,6 +48,7 @@ function AppContent() {
     itemsCount: number;
   } | null>(null);
   const [isConfirmingPaynet, setIsConfirmingPaynet] = useState(false);
+  const [paynetError, setPaynetError] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState<{
     orderId: string;
     totalAmount: number;
@@ -102,6 +103,9 @@ function AppContent() {
       haptic.impact('light');
       if (orderSuccess) {
         setOrderSuccess(null);
+      } else if (paynetPayment) {
+        setPaynetPayment(null);
+        setPaynetError(null);
       } else if (isCheckoutOpen) {
         setIsCheckoutOpen(false);
         setIsCartOpen(true);
@@ -112,7 +116,7 @@ function AppContent() {
       }
     };
 
-    if (selectedProduct || isCartOpen || isCheckoutOpen || orderSuccess) {
+    if (selectedProduct || isCartOpen || isCheckoutOpen || paynetPayment || orderSuccess) {
       backButton.show();
       backButton.onClick(handleBack);
     } else {
@@ -122,13 +126,13 @@ function AppContent() {
     return () => {
       backButton.offClick(handleBack);
     };
-  }, [selectedProduct, isCartOpen, isCheckoutOpen, orderSuccess, backButton, haptic]);
+  }, [selectedProduct, isCartOpen, isCheckoutOpen, paynetPayment, orderSuccess, backButton, haptic]);
 
   // Telegram MainButton management
   useEffect(() => {
     if (!isInsideTelegram) return;
 
-    if (orderSuccess || isCheckoutOpen) {
+    if (orderSuccess || isCheckoutOpen || paynetPayment) {
       mainButton.hide();
       return;
     }
@@ -179,6 +183,7 @@ function AppContent() {
     totalAmount,
     isCartOpen,
     isCheckoutOpen,
+    paynetPayment,
     orderSuccess,
     isInsideTelegram,
     mainButton,
@@ -243,7 +248,7 @@ function AppContent() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || 'Checkout failed');
       }
 
@@ -261,6 +266,7 @@ function AppContent() {
           theme.paynetQrUrl ||
           'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
 
+        setPaynetError(null);
         setPaynetPayment({
           orderId: data.orderId || 'NEW',
           totalAmount: boughtAmount,
@@ -289,17 +295,26 @@ function AppContent() {
 
     try {
       setIsConfirmingPaynet(true);
+      setPaynetError(null);
+
+      const res = await fetch(
+        `${API_BASE}/api/v1/shop/orders/${paynetPayment.orderId}/confirm-paynet?tenant_id=${tenantId}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Ошибка подтверждения (${res.status})`);
+      }
+
       haptic.notification('success');
-
-      await fetch(`${API_BASE}/api/v1/shop/orders/${paynetPayment.orderId}/confirm-paynet?tenant_id=${tenantId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(initData ? { 'X-Telegram-Init-Data': initData } : {}),
-        },
-        body: JSON.stringify({}),
-      });
-
       const saved = { ...paynetPayment };
       setPaynetPayment(null);
       setOrderSuccess({
@@ -309,7 +324,7 @@ function AppContent() {
       });
     } catch (err: any) {
       haptic.notification('error');
-      alert(`Ошибка подтверждения: ${err.message}`);
+      setPaynetError(err?.message || 'Не удалось подтвердить оплату. Попробуйте ещё раз.');
     } finally {
       setIsConfirmingPaynet(false);
     }
@@ -387,10 +402,7 @@ function AppContent() {
       {bootstrap?.categories && bootstrap.categories.length > 0 && (
         <div className="px-4 mt-3 overflow-x-auto no-scrollbar flex items-center gap-1.5 pb-1">
           {bootstrap.categories.map((cat) => {
-            const catLabel =
-              cat === 'All'
-                ? t('category.all')
-                : t(`category.${cat.toLowerCase()}`) || cat;
+            const catLabel = translateCategory(t, cat);
 
             return (
               <button
@@ -414,9 +426,7 @@ function AppContent() {
       <main className="px-4 mt-4">
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-sm font-semibold text-[var(--c-text)]">
-            {selectedCategory === 'All'
-              ? t('category.all')
-              : t(`category.${selectedCategory.toLowerCase()}`) || selectedCategory}
+            {translateCategory(t, selectedCategory)}
           </h2>
           <span className="text-xs text-[var(--c-hint)]">
             {t('miniapp.items_count', { count: filteredProducts.length })}
@@ -453,7 +463,7 @@ function AppContent() {
       </main>
 
       {/* Desktop / Browser Preview Fallback Bottom Bar */}
-      {!isInsideTelegram && items.length > 0 && !isCartOpen && !isCheckoutOpen && !selectedProduct && (
+      {!isInsideTelegram && items.length > 0 && !isCartOpen && !isCheckoutOpen && !paynetPayment && !orderSuccess && !selectedProduct && (
         <div className="fallback-bar">
           <button
             type="button"
@@ -525,8 +535,12 @@ function AppContent() {
           currency={theme.currency || 'UZS'}
           paynetQrUrl={paynetPayment.paynetQrUrl}
           onConfirmPaid={handleConfirmPaynetPaid}
-          onClose={() => setPaynetPayment(null)}
+          onClose={() => {
+            setPaynetPayment(null);
+            setPaynetError(null);
+          }}
           isConfirming={isConfirmingPaynet}
+          errorMessage={paynetError}
         />
       )}
 

@@ -1,11 +1,75 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../api/client.js';
-import { Bot, Save, Key, ShieldCheck, Palette, Store, CheckCircle, QrCode, ExternalLink } from 'lucide-react';
+import { MerchantProfile } from '../types/index.js';
+import {
+  Bot,
+  Save,
+  CheckCircle,
+  QrCode,
+  ExternalLink,
+  CreditCard,
+  AlertCircle,
+  Check,
+} from 'lucide-react';
 
 const DEFAULT_PAYNET_LINK =
   'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
 
-export function Settings() {
+const PLATFORM_PAYNET_QR_IMG = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(
+  DEFAULT_PAYNET_LINK
+)}`;
+
+type PlanTierId = 'BASIC_20' | 'PRO_30' | 'STANDALONE_LIFETIME';
+
+const BILLING_PLANS: Array<{
+  id: PlanTierId;
+  title: string;
+  priceDisplay: string;
+  description: string;
+  badge?: string;
+}> = [
+  {
+    id: 'BASIC_20',
+    title: 'Basic',
+    priceDisplay: '$20/мес · 255 000 сум',
+    description: 'Каталог, корзина и заказы прямо в Telegram-боте.',
+  },
+  {
+    id: 'PRO_30',
+    title: 'Pro Mini App',
+    priceDisplay: '$30/мес · 385 000 сум',
+    description: 'Полноэкранная витрина Mini App, поиск и аналитика продаж.',
+    badge: 'Популярный',
+  },
+  {
+    id: 'STANDALONE_LIFETIME',
+    title: 'Standalone Lifetime',
+    priceDisplay: '$350 · 4 500 000 сум',
+    description: 'Развертывание на вашем сервере разово без подписки.',
+    badge: 'Навсегда',
+  },
+];
+
+function normalizePlanTier(plan?: string): PlanTierId {
+  const upper = (plan || '').toUpperCase();
+  if (upper === 'PRO_30' || upper === 'PRO') return 'PRO_30';
+  if (upper === 'STANDALONE_LIFETIME' || upper === 'STANDALONE') return 'STANDALONE_LIFETIME';
+  return 'BASIC_20';
+}
+
+function formatActivePlanName(plan?: string): string {
+  const tier = normalizePlanTier(plan);
+  if (tier === 'PRO_30') return 'Pro Mini App $30/мес';
+  if (tier === 'STANDALONE_LIFETIME') return 'Standalone Lifetime $350';
+  return 'Basic $20/мес';
+}
+
+interface SettingsProps {
+  profile?: MerchantProfile | null;
+  onProfileUpdated?: () => void;
+}
+
+export function Settings({ profile, onProfileUpdated }: SettingsProps = {}) {
   const [storeName, setStoreName] = useState('');
   const [currency, setCurrency] = useState('UZS');
   const [ownerTelegramId, setOwnerTelegramId] = useState('');
@@ -26,6 +90,22 @@ export function Settings() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Platform Subscription Billing (Paynet QR-Online)
+  const [selectedPlan, setSelectedPlan] = useState<PlanTierId>(() =>
+    normalizePlanTier(profile?.tenant?.plan)
+  );
+  const hasUserPickedPlanRef = useRef(false);
+  const [platformQrError, setPlatformQrError] = useState(false);
+  const [isConfirmingBilling, setIsConfirmingBilling] = useState(false);
+  const [billingSuccess, setBillingSuccess] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile?.tenant?.plan && !hasUserPickedPlanRef.current) {
+      setSelectedPlan(normalizePlanTier(profile.tenant.plan));
+    }
+  }, [profile?.tenant?.plan]);
 
   useEffect(() => {
     async function loadSettings() {
@@ -92,6 +172,7 @@ export function Settings() {
         }),
       });
       setSaveSuccess(true);
+      onProfileUpdated?.();
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
       alert(`Ошибка сохранения: ${err.message}`);
@@ -117,10 +198,39 @@ export function Settings() {
       }
       setTokenStatus('Токен успешно проверен и подключен!');
       setNewBotToken('');
+      onProfileUpdated?.();
     } catch (err: any) {
       setTokenStatus(`Ошибка: ${err.message}`);
     } finally {
       setIsUpdatingToken(false);
+    }
+  };
+
+  const handleConfirmBillingPaynet = async () => {
+    setIsConfirmingBilling(true);
+    setBillingSuccess(null);
+    setBillingError(null);
+
+    try {
+      await apiRequest('/api/v1/billing/confirm-paynet', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenantId: profile?.tenant?.id,
+          telegramUserId: ownerTelegramId || profile?.tenant?.ownerTelegramId,
+          plan: selectedPlan,
+        }),
+      });
+
+      const chosen = BILLING_PLANS.find((p) => p.id === selectedPlan);
+      setBillingSuccess(
+        `Оплата тарифа «${chosen?.title || selectedPlan}» подтверждена! Подписка активна, уведомление отправлено администратору.`
+      );
+      hasUserPickedPlanRef.current = false;
+      onProfileUpdated?.();
+    } catch (err: any) {
+      setBillingError(err?.message || 'Не удалось подтвердить оплату тарифа');
+    } finally {
+      setIsConfirmingBilling(false);
     }
   };
 
@@ -365,6 +475,154 @@ export function Settings() {
             )}
           </div>
         </form>
+      </section>
+
+      {/* Platform Subscription & Paynet Billing Section */}
+      <section className="rounded-md border border-line bg-paper p-5 space-y-5">
+        <div className="border-b border-line pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-ink shrink-0" />
+              <h2>Тариф и оплата подписки (Mirai Commerce)</h2>
+            </div>
+            <p className="hint">
+              Выберите тариф и оплатите подписку через Paynet QR-Online без комиссии.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-subtle border border-line text-xs font-medium text-ink self-start sm:self-auto">
+            <span className="text-muted">Текущий тариф:</span>
+            <span className="font-semibold">{formatActivePlanName(profile?.tenant?.plan)}</span>
+          </div>
+        </div>
+
+        {/* Plan Selector Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {BILLING_PLANS.map((plan) => {
+            const isSelected = selectedPlan === plan.id;
+            const isCurrent = normalizePlanTier(profile?.tenant?.plan) === plan.id;
+
+            return (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => {
+                  hasUserPickedPlanRef.current = true;
+                  setSelectedPlan(plan.id);
+                  setBillingError(null);
+                  setBillingSuccess(null);
+                }}
+                className={`text-left p-4 rounded-md border transition-colors flex flex-col justify-between gap-3 ${
+                  isSelected
+                    ? 'border-ink bg-subtle/60 ring-1 ring-ink'
+                    : 'border-line bg-paper hover:bg-subtle/30'
+                }`}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-ink">{plan.title}</span>
+                    {isCurrent ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+                        Активен
+                      </span>
+                    ) : plan.badge ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-subtle text-muted border border-line">
+                        {plan.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-sm font-bold text-ink tabular">{plan.priceDisplay}</div>
+                  <p className="text-xs text-muted leading-relaxed">{plan.description}</p>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs font-medium">
+                  <span
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      isSelected ? 'border-ink bg-ink text-paper' : 'border-line'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-2.5 h-2.5" />}
+                  </span>
+                  <span className={isSelected ? 'text-ink' : 'text-muted'}>
+                    {isSelected ? 'Выбрано к оплате' : 'Выбрать тариф'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Platform Owner Paynet QR + Action Buttons */}
+        <div className="rounded-md border border-line bg-subtle/30 p-4 flex flex-col sm:flex-row items-center gap-5">
+          <div className="w-44 h-44 bg-white rounded-md border border-line p-2 flex items-center justify-center shrink-0">
+            {platformQrError ? (
+              <div className="text-center space-y-1.5 px-2">
+                <QrCode className="w-8 h-8 text-emerald-700 mx-auto" />
+                <p className="text-[11px] font-medium text-ink">QR-код недоступен</p>
+                <p className="text-[10px] text-muted">Используйте кнопку Paynet справа</p>
+              </div>
+            ) : (
+              <img
+                src={PLATFORM_PAYNET_QR_IMG}
+                alt="Paynet QR-Online для оплаты тарифа Mirai Commerce"
+                onError={() => setPlatformQrError(true)}
+                className="w-full h-full object-contain"
+              />
+            )}
+          </div>
+
+          <div className="flex-1 space-y-3 text-center sm:text-left">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                Paynet QR-Online · 0% комиссия
+              </div>
+              <div className="text-sm font-semibold text-ink">
+                К оплате:{' '}
+                {BILLING_PLANS.find((p) => p.id === selectedPlan)?.title} (
+                {BILLING_PLANS.find((p) => p.id === selectedPlan)?.priceDisplay})
+              </div>
+              <p className="text-xs text-muted">
+                Отсканируйте QR-код в приложении Paynet или откройте прямую ссылку оплаты. После перевода нажмите кнопку подтверждения ниже.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <a
+                href={DEFAULT_PAYNET_LINK}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-secondary !border-emerald-600/30 !bg-emerald-50 !text-emerald-800 hover:!bg-emerald-100"
+              >
+                <span>⚡ Оплатить через Paynet QR-Online</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <button
+                type="button"
+                disabled={isConfirmingBilling}
+                onClick={handleConfirmBillingPaynet}
+                className="btn-primary"
+              >
+                <span>
+                  {isConfirmingBilling ? 'Подтверждение…' : '✅ Я оплатил тариф'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {billingSuccess && (
+          <div className="p-3.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{billingSuccess}</span>
+          </div>
+        )}
+
+        {billingError && (
+          <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{billingError}</span>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -25,7 +25,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
       }),
       tenantDb.product.findMany({
         where: { is_active: true },
-        take: 8,
+        take: 200,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -36,7 +36,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
       ...DEFAULT_THEME_CONFIG,
       ...botData.tenant.themeConfig,
       storeName: botData.tenant.themeConfig?.storeName || botData.tenant.name,
-      currency: botData.tenant.currency || 'USD',
+      currency: botData.tenant.currency || 'UZS',
     };
 
     return reply.send({
@@ -44,7 +44,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
         id: botData.tenant.id,
         name: botData.tenant.name,
         plan: botData.tenant.plan,
-        currency: botData.tenant.currency,
+        currency: botData.tenant.currency || 'UZS',
         isActive: botData.isActive,
       },
       theme,
@@ -166,7 +166,7 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
     Body?: Record<string, any>;
   }>('/api/v1/shop/orders/:id/confirm-paynet', { preHandler: [tenantContextMiddleware] }, async (req, reply) => {
     try {
-      const result = await confirmPaynetPayment(req.params.id);
+      const result = await confirmPaynetPayment(req.params.id, req.tenantId);
       return reply.send(result);
     } catch (err: any) {
       req.log.error(err, 'Paynet confirmation failed');
@@ -200,7 +200,9 @@ export const shopRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params;
     const { session_id } = req.query;
 
-    await fulfillOrder(id, session_id);
+    if (typeof session_id === 'string' && (session_id.startsWith('cs_') || session_id.startsWith('mock_sess_'))) {
+      await fulfillOrder(id, session_id);
+    }
 
     reply.type('text/html').send(`
       <!DOCTYPE html>

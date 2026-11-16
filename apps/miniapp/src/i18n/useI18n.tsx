@@ -58,6 +58,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
+export function translateCategory(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  cat?: string
+): string {
+  if (!cat) return '';
+  if (cat === 'All') return t('category.all');
+  const key = `category.${cat.toLowerCase()}`;
+  const translated = t(key);
+  return translated && translated !== key && !translated.startsWith('category.') ? translated : cat;
+}
+
 export function useI18n(): I18nContextValue {
   const context = useContext(I18nContext);
   if (!context) {

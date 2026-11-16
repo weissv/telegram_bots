@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, QrCode, ExternalLink, CheckCircle2, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, QrCode, ExternalLink, CheckCircle2, ShieldCheck, Check, AlertCircle } from 'lucide-react';
 import { useI18n } from '../i18n/useI18n.js';
 
 interface PaynetPaymentModalProps {
@@ -11,6 +11,59 @@ interface PaynetPaymentModalProps {
   onConfirmPaid: () => Promise<void>;
   onClose: () => void;
   isConfirming: boolean;
+  errorMessage?: string | null;
+}
+
+const MODAL_COPY = {
+  ru: {
+    copyAmount: '📋 Скопировать сумму',
+    copyLink: '🔗 Скопировать ссылку Paynet',
+    copied: 'Скопировано!',
+    howToPay: 'Как оплатить:',
+    qrFallbackTitle: 'QR-код временно недоступен',
+    qrFallbackHint: 'Нажмите «Открыть Paynet» ниже или скопируйте ссылку для оплаты.',
+  },
+  uz: {
+    copyAmount: '📋 Summani nusxalash',
+    copyLink: '🔗 Paynet havolasini nusxalash',
+    copied: 'Nusxalandi!',
+    howToPay: "Qanday to'lanadi:",
+    qrFallbackTitle: 'QR-kod vaqtincha yuklanmadi',
+    qrFallbackHint: "Quyidagi Paynet tugmasini bosing yoki to'lov havolasini nusxalang.",
+  },
+  en: {
+    copyAmount: '📋 Copy amount',
+    copyLink: '🔗 Copy Paynet link',
+    copied: 'Copied!',
+    howToPay: 'How to pay:',
+    qrFallbackTitle: 'QR image unavailable',
+    qrFallbackHint: 'Tap the Paynet button below or copy the payment link.',
+  },
+} as const;
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback below for WebViews without Clipboard API permission
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 export function PaynetPaymentModal({
@@ -22,14 +75,44 @@ export function PaynetPaymentModal({
   onConfirmPaid,
   onClose,
   isConfirming,
+  errorMessage,
 }: PaynetPaymentModalProps) {
-  const { t, formatCurrency } = useI18n();
+  const { t, locale, formatCurrency } = useI18n();
+  const [qrLoadError, setQrLoadError] = useState(false);
+  const [copiedField, setCopiedField] = useState<'amount' | 'link' | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setQrLoadError(false);
+    setCopiedField(null);
+  }, [isOpen, paynetQrUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
+  const copy = MODAL_COPY[locale] || MODAL_COPY.ru;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(
     paynetQrUrl
   )}`;
+
+  const handleCopy = async (field: 'amount' | 'link', value: string) => {
+    const ok = await copyToClipboard(value);
+    if (!ok) return;
+    setCopiedField(field);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopiedField((curr) => (curr === field ? null : curr));
+    }, 2000);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 transition-opacity">
@@ -52,6 +135,7 @@ export function PaynetPaymentModal({
             <button
               type="button"
               onClick={onClose}
+              disabled={isConfirming}
               className="p-1 rounded-full text-[var(--c-hint)] hover:text-[var(--c-text)]"
               aria-label="Закрыть"
             >
@@ -77,19 +161,67 @@ export function PaynetPaymentModal({
             </div>
           </div>
 
-          {/* QR Code Container */}
-          <div className="mx-auto w-56 h-56 p-2 bg-white rounded-2xl shadow-md border border-[var(--c-separator)] flex items-center justify-center overflow-hidden">
-            <img
-              src={qrImageUrl}
-              alt="Paynet Xolis QR Code"
-              className="w-full h-full object-contain"
-            />
+          {/* QR Code Container with Fallback */}
+          <div className="mx-auto w-56 h-56 p-3 bg-white rounded-2xl shadow-md border border-[var(--c-separator)] flex items-center justify-center overflow-hidden">
+            {qrLoadError ? (
+              <div className="flex flex-col items-center justify-center text-center space-y-2 px-2">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <QrCode className="w-8 h-8 text-emerald-600" />
+                </div>
+                <div className="text-xs font-semibold text-zinc-900">
+                  {copy.qrFallbackTitle}
+                </div>
+                <p className="text-[11px] leading-snug text-zinc-500">
+                  {copy.qrFallbackHint}
+                </p>
+              </div>
+            ) : (
+              <img
+                src={qrImageUrl}
+                alt="Paynet Xolis QR Code"
+                onError={() => setQrLoadError(true)}
+                className="w-full h-full object-contain"
+              />
+            )}
+          </div>
+
+          {/* Quick Copy Helpers */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleCopy('amount', String(totalAmount))}
+              className="h-10 px-2.5 rounded-xl bg-[var(--c-secondary)] border border-[var(--c-separator)] text-xs font-medium text-[var(--c-text)] flex items-center justify-center gap-1.5 active:opacity-80"
+            >
+              {copiedField === 'amount' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-emerald-600 font-semibold">{copy.copied}</span>
+                </>
+              ) : (
+                <span className="truncate">{copy.copyAmount}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCopy('link', paynetQrUrl)}
+              className="h-10 px-2.5 rounded-xl bg-[var(--c-secondary)] border border-[var(--c-separator)] text-xs font-medium text-[var(--c-text)] flex items-center justify-center gap-1.5 active:opacity-80"
+            >
+              {copiedField === 'link' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="text-emerald-600 font-semibold">{copy.copied}</span>
+                </>
+              ) : (
+                <span className="truncate">{copy.copyLink}</span>
+              )}
+            </button>
           </div>
 
           {/* Step-by-step instructions */}
           <div className="p-3.5 rounded-xl bg-[var(--c-secondary)] text-left text-xs space-y-2 text-[var(--c-text)]">
             <div className="font-semibold text-[var(--c-hint)] uppercase tracking-wide text-[11px]">
-              Как оплатить:
+              {copy.howToPay}
             </div>
             <div className="space-y-1 text-xs opacity-90">
               <p>• {t('checkout.paynet_step1')}</p>
@@ -98,8 +230,18 @@ export function PaynetPaymentModal({
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 flex items-start gap-2 text-left">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="space-y-2 pt-1 pb-4">
+          <div
+            className="space-y-2 pt-1"
+            style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
+          >
             {/* Paynet Deep Link */}
             <a
               href={paynetQrUrl}

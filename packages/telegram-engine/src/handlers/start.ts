@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { BotContext } from '../types.js';
 import { getMainMenuKeyboard } from '../keyboards/index.js';
-import { t } from '@telegram-commerce/i18n';
+import { t, formatCurrency } from '@telegram-commerce/i18n';
 import { PLAN_TIERS } from '@telegram-commerce/config';
 
 /**
@@ -39,7 +39,7 @@ export async function handleStart(ctx: BotContext) {
 
 ${escapeHtml(product.description || '')}
 
-💰 <b>${locale === 'ru' ? 'Цена' : locale === 'en' ? 'Price' : 'Narxi'}:</b> $${Number(product.price).toFixed(2)}
+💰 <b>${locale === 'ru' ? 'Цена' : locale === 'en' ? 'Price' : 'Narxi'}:</b> ${formatCurrency(Number(product.price), tenant.currency || 'UZS', locale)}
 📦 <b>${locale === 'ru' ? 'В наличии' : locale === 'en' ? 'In stock' : 'Mavjud'}:</b> ${product.stock}
 `.trim();
 

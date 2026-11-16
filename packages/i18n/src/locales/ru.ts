@@ -56,6 +56,8 @@ export const ru: TranslationDictionary = {
   'checkout.total': '💰 <b>Итого:</b> <b>{total}</b>',
   'checkout.pay_prompt': 'Нажмите кнопку ниже для безопасной оплаты.',
   'checkout.pay_now': '💳 Оплатить',
+  'checkout.paynet_btn': '⚡ Оплатить в Paynet (0% комиссия)',
+  'checkout.paynet_instructions': '1️⃣ Нажмите кнопку <b>«Оплатить в Paynet»</b> ниже\n2️⃣ Оплатите точную сумму заказа (0% комиссия)\n3️⃣ Вернитесь в бот и нажмите <b>«Я оплатил заказ»</b>',
   'checkout.failed': 'Ошибка оформления: {error}',
 
   // ─── Orders ───
@@ -67,6 +69,9 @@ export const ru: TranslationDictionary = {
   'orders.status_delivered': '🚚 Доставлен',
   'orders.status_cancelled': '❌ Отменён',
   'orders.order_line': '🧾 <b>Заказ #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Статус:</b> {status}\n💰 <b>Сумма:</b> <code>{total}</code>\n📦 <i>Товары: {items}</i>',
+  'orders.notify_paid': '✅ <b>Оплата по заказу #{orderId} подтверждена!</b>\n\nМы уже готовим ваш заказ к отправке.',
+  'orders.notify_delivered': '🚚 <b>Заказ #{orderId} доставлен!</b>\n\nСпасибо за покупку! Будем рады видеть вас снова.',
+  'orders.notify_cancelled': '❌ <b>Заказ #{orderId} отменён.</b>\n\nЕсли у вас есть вопросы, свяжитесь с магазином.',
 
   // ─── WebApp ───
   'webapp.launch': '🚀 Откройте интерактивный магазин ниже:',
@@ -115,10 +120,16 @@ export const ru: TranslationDictionary = {
 
   // ─── Categories ───
   'category.all': 'Все товары',
+  'category.general': 'Общее',
   'category.apparel': 'Одежда',
   'category.footwear': 'Обувь',
   'category.accessories': 'Аксессуары',
   'category.electronics': 'Электроника',
+  'category.общее': 'Общее',
+  'category.одежда': 'Одежда',
+  'category.обувь': 'Обувь',
+  'category.аксессуары': 'Аксессуары',
+  'category.электроника': 'Электроника',
 
   // ─── Product Card & Detail ───
   'product.out_of_stock': 'Нет в наличии',

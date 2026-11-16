@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { getAuthToken, clearAuthToken, apiRequest } from './api/client.js';
 import { Login } from './pages/Login.js';
 import { Dashboard } from './pages/Dashboard.js';
@@ -24,6 +24,15 @@ export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [profile, setProfile] = useState<MerchantProfile | null>(null);
 
+  const refreshProfile = useCallback(async () => {
+    try {
+      const data = await apiRequest<MerchantProfile>('/api/v1/admin/auth/me');
+      setProfile(data);
+    } catch (err) {
+      console.error('Failed to refresh profile:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (isAuthenticated) {
       apiRequest<MerchantProfile>('/api/v1/admin/auth/me')
@@ -32,6 +41,8 @@ export function App() {
           clearAuthToken();
           setIsAuthenticated(false);
         });
+    } else {
+      setProfile(null);
     }
   }, [isAuthenticated]);
 
@@ -44,7 +55,7 @@ export function App() {
     setIsAuthenticated(false);
   };
 
-  const currency = profile?.tenant?.botConfig?.currency || 'USD';
+  const currency = profile?.tenant?.botConfig?.currency || 'UZS';
   const tenantId = profile?.tenant?.id || 'demo-tenant';
   const storefrontUrl =
     typeof window !== 'undefined' && window.location.port === '5174'
@@ -161,7 +172,9 @@ export function App() {
           {activeTab === 'dashboard' && <Dashboard currency={currency} />}
           {activeTab === 'products' && <Products currency={currency} />}
           {activeTab === 'orders' && <Orders currency={currency} />}
-          {activeTab === 'settings' && <Settings />}
+          {activeTab === 'settings' && (
+            <Settings profile={profile} onProfileUpdated={refreshProfile} />
+          )}
         </div>
       </main>
     </div>

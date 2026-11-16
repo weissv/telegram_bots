@@ -110,6 +110,11 @@ export async function createServer(): Promise<FastifyInstance> {
     };
   });
 
+  // Robots.txt
+  fastify.get('/robots.txt', async (_req, reply) => {
+    return reply.type('text/plain').send('User-agent: *\nAllow: /\n');
+  });
+
   // Root route: serve Landing if built, otherwise redirect to demo storefront
   fastify.get('/', async (req, reply) => {
     if (fs.existsSync(path.join(landingDist, 'index.html'))) {

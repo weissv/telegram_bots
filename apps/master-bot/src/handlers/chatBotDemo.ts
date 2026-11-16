@@ -1,6 +1,7 @@
-import { InlineKeyboard, type Context, InputFile } from 'grammy';
+import { InlineKeyboard, type Context } from 'grammy';
 import { prisma } from '@telegram-commerce/database';
 import { getEnv, isHttpsUrl, isSafeTelegramUrl, DEFAULT_PAYNET_QR_URL } from '@telegram-commerce/config';
+import { escapeHtml, formatUzs } from '../utils.js';
 
 interface DemoCartItem {
   id: string;
@@ -17,8 +18,7 @@ function getCart(ctx: Context): DemoCartItem[] {
 }
 
 function formatPrice(amount: number): string {
-  // Format as Uzbek Sums (UZS)
-  return `${new Intl.NumberFormat('ru-RU').format(Math.round(amount))} сум`;
+  return formatUzs(amount, 'ru');
 }
 
 export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEdit = false) {
@@ -120,11 +120,10 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
   keyboard.row().text(`🛒 Корзина в чате (${totalCartCount})`, 'chatdemo:cart');
 
   // Row 4: Compare with Mini App
-  keyboard.row();
   if (isHttpsUrl(miniappUrl)) {
-    keyboard.webApp('📱 Открыть эту же витрину в Mini App', miniappUrl);
-  } else {
-    keyboard.url('📱 Открыть витрину в Mini App', miniappUrl);
+    keyboard.row().webApp('📱 Открыть эту же витрину в Mini App', miniappUrl);
+  } else if (isSafeTelegramUrl(miniappUrl)) {
+    keyboard.row().url('📱 Открыть витрину в Mini App', miniappUrl);
   }
 
   // Row 5: Return to main menu
@@ -133,13 +132,13 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
   const text = `
 🛍️ <b>ДЕМО ОБЫЧНОГО БОТА (ПОКУПКИ В ЧАТЕ)</b>
 ━━━━━━━━━━━━━━━━━━━━
-🏷️ <b>${product.title}</b>
-📁 <i>Категория: ${product.category || 'Одежда'}</i>
+🏷️ <b>${escapeHtml(product.title)}</b>
+📁 <i>Категория: ${escapeHtml(product.category || 'Одежда')}</i>
 💰 <b>Цена:</b> <code>${formatPrice(Number(product.price))}</code>
 🟢 <b>В наличии:</b> ${product.stock} шт.
 
 📝 <b>Описание:</b>
-${product.description || 'Качественный товар с быстрой доставкой по Ташкенту.'}
+${escapeHtml(product.description || 'Качественный товар с быстрой доставкой по Ташкенту.')}
 
 <i>👆 Листайте товары кнопками ниже или нажмите «В корзину»!</i>
 `.trim();
@@ -259,7 +258,7 @@ export async function handleChatBotDemoViewCart(ctx: Context) {
 
   let text = `🛒 <b>ВАША КОРЗИНА (ДЕМО БОТА)</b>\n━━━━━━━━━━━━━━━━━━━━\n\n`;
   cart.forEach((item, index) => {
-    text += `${index + 1}. <b>${item.title}</b>\n   ${item.quantity} шт. × ${formatPrice(item.price)} = <code>${formatPrice(item.price * item.quantity)}</code>\n\n`;
+    text += `${index + 1}. <b>${escapeHtml(item.title)}</b>\n   ${item.quantity} шт. × ${formatPrice(item.price)} = <code>${formatPrice(item.price * item.quantity)}</code>\n\n`;
   });
 
   text += `━━━━━━━━━━━━━━━━━━━━\n`;
@@ -292,27 +291,51 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
     return;
   }
 
+  const env = getEnv();
+  const demoTenantId = env.STANDALONE_TENANT_ID || '00000000-0000-0000-0000-000000000001';
   const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const orderNum = Math.floor(100000 + Math.random() * 900000);
-  const orderId = `TAS-${orderNum}`;
+  const customerTelegramId = String(ctx.from?.id || 'demo');
+  const customerName =
+    [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() ||
+    (ctx.from?.username ? `@${ctx.from.username}` : 'Покупатель Telegram');
 
-  // Clear cart
+  let order;
+  try {
+    order = await prisma.order.create({
+      data: {
+        tenant_id: demoTenantId,
+        status: 'PENDING',
+        payment_method: 'PAYNET_XOLIS',
+        customer_telegram_id: customerTelegramId,
+        customer_name: customerName,
+        items: cart as any,
+        total_amount: totalAmount as any,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to create demo chat order:', err);
+    await ctx.answerCallbackQuery({
+      text: '⚠️ Не удалось создать заказ. Попробуйте позже.',
+      show_alert: true,
+    });
+    return;
+  }
+
+  // Clear cart only after order persistence succeeds
   (ctx as any).session.chatDemoCart = [];
 
-  const env = getEnv();
   const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
   const paynetUrl = DEFAULT_PAYNET_QR_URL;
-  const keyboard = new InlineKeyboard();
+  const keyboard = new InlineKeyboard()
+    .url('⚡ Оплатить в Paynet (0% комиссия)', paynetUrl)
+    .row()
+    .text('✅ Я оплатил заказ', `chatdemo:pay:${order.id}`);
 
-  // Paynet direct link button
-  keyboard.url('⚡ Оплатить в Paynet (0% комиссия)', paynetUrl);
-
-  keyboard.row();
   if (isHttpsUrl(miniappUrl)) {
-    keyboard.webApp('📱 Открыть витрину (Mini App)', miniappUrl);
-  } else {
-    keyboard.url('📱 Открыть витрину (Mini App)', miniappUrl);
+    keyboard.row().webApp('📱 Открыть витрину (Mini App)', miniappUrl);
+  } else if (isSafeTelegramUrl(miniappUrl)) {
+    keyboard.row().url('📱 Открыть витрину (Mini App)', miniappUrl);
   }
 
   keyboard
@@ -321,28 +344,128 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
     .row()
     .text('🚀 Запустить такой же магазин', 'onboard:start');
 
+  const shortOrderId = order.id.slice(0, 8);
   const text = `
 🎉 <b>ЗАКАЗ УСПЕШНО ОФОРМЛЕН!</b>
 ━━━━━━━━━━━━━━━━━━━━
-🧾 <b>Номер заказа:</b> <code>#${orderId}</code>
+🧾 <b>Номер заказа:</b> <code>#${shortOrderId}</code>
 💰 <b>Сумма:</b> <b>${formatPrice(totalAmount)}</b>
 📦 <b>Товаров:</b> ${itemsCount} шт.
 🚚 <b>Доставка:</b> Курьером по Ташкенту (в течение 3 часов)
-💳 <b>Оплата:</b> Paynet Xolis (0% комиссия) или при получении
+💳 <b>Оплата:</b> Paynet Xolis (0% комиссия)
 
-⚡ <b>Оплата для самозанятых через Paynet Xolis:</b>
-Нажмите кнопку «⚡ Оплатить в Paynet» ниже — откроется государственная система QR-Online (Soliq) с переводом без комиссии мерчанту.
-
-🔔 <i>Мерчант магазина уже получил мгновенное уведомление в Telegram с составом вашего заказа!</i>
+⚡ <b>Как оплатить через Paynet Xolis:</b>
+1. Нажмите кнопку «⚡ Оплатить в Paynet (0% комиссия)» ниже — откроется государственная система QR-Online (Soliq).
+2. Подтвердите платеж в приложении Paynet.
+3. Нажмите кнопку «✅ Я оплатил заказ», чтобы получить чек и уведомить владельца магазина.
 
 ━━━━━━━━━━━━━━━━━━━━
 Так работает стандартный <b>Базовый чат-бот ($20/мес)</b>.
 Для интерактивного опыта с анимацией выберите <b>Pro Mini App ($30/мес)</b>!
 `.trim();
 
-  await ctx.answerCallbackQuery({ text: '🎉 Заказ успешно создан!' });
+  await ctx.answerCallbackQuery({ text: '🎉 Заказ создан! Ожидает оплаты через Paynet.' });
   await ctx.reply(text, {
     parse_mode: 'HTML',
     reply_markup: keyboard,
+  });
+}
+
+export async function handleChatBotDemoConfirmPay(ctx: Context, orderId: string) {
+  const env = getEnv();
+  const ownerTelegramId = env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    await ctx.answerCallbackQuery({ text: '⚠️ Заказ не найден', show_alert: true });
+    return;
+  }
+
+  const shortOrderId = order.id.slice(0, 8);
+
+  if (order.status === 'PAID') {
+    await ctx.answerCallbackQuery({ text: '✅ Заказ уже отмечен как оплаченный!' });
+    await ctx.reply(
+      `✅ <b>Заказ #${shortOrderId} уже оплачен!</b>\n\n` +
+      `Вы можете проверить статус заказа в разделе /orders.`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  const updateResult = await prisma.order.updateMany({
+    where: { id: order.id, status: { not: 'PAID' } },
+    data: {
+      status: 'PAID',
+      payment_method: order.payment_method || 'PAYNET_XOLIS',
+      payment_id: `paynet_demo_${Date.now()}`,
+    },
+  });
+
+  if (updateResult.count === 0) {
+    await ctx.answerCallbackQuery({ text: '✅ Заказ уже оплачен!' });
+    return;
+  }
+
+  const rawItems = Array.isArray(order.items) ? (order.items as Array<Record<string, any>>) : [];
+  const itemsSummary = rawItems
+    .map((item) => {
+      const title = escapeHtml(String(item.title || 'Товар'));
+      const qty = Number(item.quantity || 1);
+      const lineTotal = Number(item.price || 0) * qty;
+      return `  • <b>${title}</b> × ${qty} — <code>${formatPrice(lineTotal)}</code>`;
+    })
+    .join('\n');
+
+  const totalFormatted = formatPrice(Number(order.total_amount));
+  const customerName = escapeHtml(order.customer_name || ctx.from?.first_name || 'Покупатель Telegram');
+  const customerUsername = ctx.from?.username ? `@${escapeHtml(ctx.from.username)}` : 'без @username';
+
+  const ownerAlert = `
+💰 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ (Демо-бот Paynet)</b>
+━━━━━━━━━━━━━━━━━━━━
+🧾 <b>Заказ:</b> <code>#${shortOrderId}</code>
+💵 <b>Сумма:</b> <b>${totalFormatted}</b>
+💳 <b>Способ оплаты:</b> Paynet Xolis (QR-Online)
+👤 <b>Покупатель:</b> ${customerName} (${customerUsername})
+🆔 <b>Telegram ID:</b> <code>${escapeHtml(order.customer_telegram_id)}</code>
+
+📦 <b>Состав заказа:</b>
+${itemsSummary || '  • Позиции демо-каталога'}
+`.trim();
+
+  try {
+    await ctx.api.sendMessage(ownerTelegramId, ownerAlert, { parse_mode: 'HTML' });
+  } catch (err) {
+    console.warn(`Failed to send demo order payment alert to owner ${ownerTelegramId}:`, err);
+  }
+
+  await ctx.answerCallbackQuery({ text: '✅ Оплата подтверждена!' });
+
+  const receiptKeyboard = new InlineKeyboard()
+    .text('🛍️ Вернуться в каталог', 'chatdemo:catalog')
+    .row()
+    .text('🚀 Запустить свой магазин', 'onboard:start');
+
+  const receiptText = `
+✅ <b>ОПЛАТА ПОЛУЧЕНА! ВАШ ЧЕК:</b>
+━━━━━━━━━━━━━━━━━━━━
+🧾 <b>Заказ:</b> <code>#${shortOrderId}</code>
+💰 <b>Оплачено:</b> <b>${totalFormatted}</b>
+💳 <b>Метод:</b> Paynet Xolis (0% комиссия)
+📌 <b>Статус:</b> ✅ Оплачен
+
+📦 <b>Товары:</b>
+${itemsSummary || '  • Позиции заказа'}
+
+🔔 <i>Владелец платформы получил мгновенное уведомление в Telegram. Детали всегда доступны по команде /orders.</i>
+`.trim();
+
+  await ctx.reply(receiptText, {
+    parse_mode: 'HTML',
+    reply_markup: receiptKeyboard,
   });
 }

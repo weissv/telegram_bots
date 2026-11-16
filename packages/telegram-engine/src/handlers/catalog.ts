@@ -44,7 +44,7 @@ export async function handleCatalog(ctx: BotContext, targetPage = 1, targetCateg
 
   const product = products[0];
   const totalPages = totalCount;
-  const currency = tenant.currency || 'USD';
+  const currency = tenant.currency || 'UZS';
 
   const stockBadge =
     product.stock > 10
@@ -60,7 +60,7 @@ ${t(locale, 'catalog.category', { category: escapeHtml(product.category) })}
 ${escapeHtml(product.description || '')}
 
 ${t(locale, 'catalog.price', { price: formatCurrency(Number(product.price), currency, locale) })}
-📦 <b>${locale === 'ru' ? 'Статус' : 'Holat'}:</b> ${stockBadge}
+📦 <b>${locale === 'ru' ? 'Статус' : locale === 'en' ? 'Status' : 'Holat'}:</b> ${stockBadge}
 
 ${t(locale, 'catalog.item_of', { current: targetPage, total: totalPages })}
 `.trim();

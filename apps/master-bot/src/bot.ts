@@ -1,16 +1,25 @@
 import { Bot, session, InlineKeyboard, type Context, type SessionFlavor } from 'grammy';
 import { conversations, createConversation, type ConversationFlavor } from '@grammyjs/conversations';
 import { prisma } from '@telegram-commerce/database';
-import { getEnv, isHttpsUrl, isSafeTelegramUrl } from '@telegram-commerce/config';
+import { getEnv, isHttpsUrl, isSafeTelegramUrl, type PlanTier } from '@telegram-commerce/config';
 import { handleSales } from './handlers/sales.js';
 import { handleDemo } from './handlers/demo.js';
+import {
+  handleAdminSubApprove,
+  handleAdminSubSuspend,
+  handlePricingPlanSelect,
+  handlePricingView,
+  handleSubscriptionConfirm,
+} from './handlers/pricing.js';
 import { onboardingConversation } from './conversations/onboarding.js';
 import {
   handleChatBotDemoCatalog,
   handleChatBotDemoAddToCart,
   handleChatBotDemoViewCart,
   handleChatBotDemoCheckout,
+  handleChatBotDemoConfirmPay,
 } from './handlers/chatBotDemo.js';
+import { escapeHtml, formatUzs } from './utils.js';
 
 export type MasterBotContext = ConversationFlavor<Context & SessionFlavor<Record<string, any>>>;
 
@@ -54,6 +63,13 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 
   bot.command('newstore', async (ctx) => {
     await ctx.conversation.enter('onboardingConversation');
+  });
+
+  bot.command(['pricing', 'tariffs', 'pay'], async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    await handlePricingView(ctx);
   });
 
   // Direct Catalog / Shop Commands
@@ -138,7 +154,9 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
       `ℹ️ <b>Навигация по платформе</b>\n\n` +
       `• /start — Главное меню и выбор демо-версий\n` +
       `• /catalog — Полноэкранный Telegram Mini App\n` +
+      `• /demo — Интерактивные демо (Mini App и Admin)\n` +
       `• /botdemo — Демо обычного бота с покупками прямо в чате\n` +
+      `• /pricing — Тарифы и оплата подписки через Paynet\n` +
       `• /cart — Корзина и оформление заказа\n` +
       `• /orders — История и статусы ваших заказов\n` +
       `• /newstore — Создать свой магазин за 2 минуты\n\n` +
@@ -195,10 +213,36 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     await handleSales(ctx);
   });
 
-  // Callbacks for Main Navigation
+  // Callbacks for Main Navigation & Pricing
   bot.callbackQuery('demo:view', async (ctx) => {
     await ctx.answerCallbackQuery();
     await handleDemo(ctx);
+  });
+
+  bot.callbackQuery('demo:products', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await handleChatBotDemoCatalog(ctx, 0, false);
+  });
+
+  bot.callbackQuery('pricing:view', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await handlePricingView(ctx);
+  });
+
+  bot.callbackQuery(/^pricing:plan:(BASIC_20|PRO_30|STANDALONE_LIFETIME)$/, async (ctx) => {
+    await handlePricingPlanSelect(ctx, ctx.match[1] as PlanTier);
+  });
+
+  bot.callbackQuery(/^sub:confirm:(.+):(.+)$/, async (ctx) => {
+    await handleSubscriptionConfirm(ctx, ctx.match[1], ctx.match[2]);
+  });
+
+  bot.callbackQuery(/^admin:sub:approve:(.+):(.+)$/, async (ctx) => {
+    await handleAdminSubApprove(ctx, ctx.match[1], ctx.match[2]);
+  });
+
+  bot.callbackQuery(/^admin:sub:suspend:(.+)$/, async (ctx) => {
+    await handleAdminSubSuspend(ctx, ctx.match[1]);
   });
 
   bot.callbackQuery('onboard:start', async (ctx) => {
@@ -250,6 +294,10 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     await handleChatBotDemoCheckout(ctx);
   });
 
+  bot.callbackQuery(/^chatdemo:pay:(.+)$/, async (ctx) => {
+    await handleChatBotDemoConfirmPay(ctx, ctx.match[1]);
+  });
+
   bot.callbackQuery('chatdemo:menu', async (ctx) => {
     await ctx.answerCallbackQuery();
     await handleSales(ctx);
@@ -275,11 +323,40 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
   }
 
   try {
-    const [tenantsCount, productsCount, ordersCount] = await Promise.all([
+    const [tenantsCount, productsCount, ordersCount, paidOrdersAgg, latestTenants] = await Promise.all([
       prisma.tenant.count(),
       prisma.product.count(),
       prisma.order.count(),
+      prisma.order.aggregate({
+        where: { status: { in: ['PAID', 'DELIVERED'] } },
+        _count: { _all: true },
+        _sum: { total_amount: true },
+      }),
+      prisma.tenant.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          botConfig: {
+            select: { bot_username: true },
+          },
+        },
+      }),
     ]);
+
+    const paidOrdersCount = paidOrdersAgg._count._all;
+    const totalRevenue = Number(paidOrdersAgg._sum.total_amount || 0);
+    const latestTenantsList =
+      latestTenants.length > 0
+        ? latestTenants
+            .map((tenant, idx) => {
+              const botHandle = tenant.botConfig?.bot_username
+                ? `@${escapeHtml(tenant.botConfig.bot_username)}`
+                : 'бот не привязан';
+              const statusIcon = tenant.is_active ? '🟢' : '🔴';
+              return ` ${idx + 1}. ${statusIcon} <b>${escapeHtml(tenant.name)}</b> (${botHandle}) — <code>${tenant.plan}</code>`;
+            })
+            .join('\n')
+        : ' Пока нет созданных магазинов.';
 
     const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
     const keyboard = new InlineKeyboard()
@@ -297,17 +374,28 @@ async function sendAdminDashboard(ctx: Context, isEdit = false) {
  • Всего магазинов: <b>${tenantsCount}</b>
  • Всего товаров: <b>${productsCount}</b>
  • Всего заказов: <b>${ordersCount}</b>
+ • Оплаченных заказов: <b>${paidOrdersCount}</b>
+ • Общая выручка: <b>${formatUzs(totalRevenue, 'ru')}</b>
+
+🏪 <b>5 последних магазинов:</b>
+${latestTenantsList}
 
 💼 <b>Панель управления:</b> ${env.PUBLIC_ADMIN_URL}
 🌐 <b>Витрина Mini App:</b> ${miniappUrl}
 `.trim();
 
     if (isEdit && ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
+      try {
+        await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
+      } catch (editErr: any) {
+        if (!String(editErr?.message || '').includes('message is not modified')) {
+          throw editErr;
+        }
+      }
     } else {
       await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
     }
   } catch (err: any) {
-    await ctx.reply(`⚠️ Ошибка загрузки панели: ${err?.message}`);
+    await ctx.reply(`⚠️ Ошибка загрузки панели: ${escapeHtml(err?.message || 'Неизвестная ошибка')}`);
   }
 }

@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ShoppingBag,
   Bot,
   LayoutDashboard,
   Zap,
-  ShieldCheck,
   CreditCard,
   Bell,
   ArrowRight,
@@ -13,17 +11,173 @@ import {
   Sparkles,
   ExternalLink,
   Smartphone,
-  Star,
-  Globe,
+  QrCode,
+  X,
+  Copy,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 const BOT_URL = 'https://t.me/miraiedu_bot';
 const DEMO_MINIAPP_URL = '/miniapp/?tenant_id=00000000-0000-0000-0000-000000000001';
 const ADMIN_URL = '/admin/';
 
+const API_BASE =
+  import.meta.env.VITE_API_URL ??
+  (typeof window !== 'undefined' && window.location.port === '5175'
+    ? 'http://localhost:3000'
+    : '');
+
+const PLATFORM_PAYNET_QR_URL =
+  'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
+
+const PAYNET_QR_IMAGE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+  PLATFORM_PAYNET_QR_URL
+)}`;
+
+type PlanTierId = 'BASIC_20' | 'PRO_30' | 'STANDALONE_LIFETIME';
+
+const TARIFF_DETAILS: Record<
+  PlanTierId,
+  {
+    name: string;
+    usdPrice: string;
+    period: string;
+    uzsPrice: string;
+  }
+> = {
+  BASIC_20: {
+    name: 'Базовый чат-бот (Basic)',
+    usdPrice: '$20',
+    period: '/ мес',
+    uzsPrice: '255 000 сум',
+  },
+  PRO_30: {
+    name: 'Pro Mini App',
+    usdPrice: '$30',
+    period: '/ мес',
+    uzsPrice: '385 000 сум',
+  },
+  STANDALONE_LIFETIME: {
+    name: 'Standalone VPS Lifetime',
+    usdPrice: '$350',
+    period: 'разово',
+    uzsPrice: '4 500 000 сум',
+  },
+};
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback below
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<'miniapp' | 'bot' | 'admin'>('miniapp');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [selectedPlan, setSelectedPlan] = useState<PlanTierId | null>(null);
+  const [qrLoadError, setQrLoadError] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [storeName, setStoreName] = useState('');
+  const [isNotifying, setIsNotifying] = useState(false);
+  const [notifySuccess, setNotifySuccess] = useState<string | null>(null);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPlan) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedPlan(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedPlan]);
+
+  const openPaymentModal = (plan: PlanTierId) => {
+    setSelectedPlan(plan);
+    setQrLoadError(false);
+    setCopiedLink(false);
+    setNotifySuccess(null);
+    setNotifyError(null);
+  };
+
+  const handleCopyPaynetLink = async () => {
+    const ok = await copyToClipboard(PLATFORM_PAYNET_QR_URL);
+    if (!ok) return;
+    setCopiedLink(true);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopiedLink(false);
+    }, 2000);
+  };
+
+  const handleConfirmPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlan) return;
+
+    setIsNotifying(true);
+    setNotifySuccess(null);
+    setNotifyError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/billing/confirm-paynet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          customerEmail: customerEmail.trim() || undefined,
+          storeName: storeName.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Ошибка отправки (${res.status})`);
+      }
+
+      setNotifySuccess(
+        'Уведомление об оплате отправлено администратору! Активируйте магазин в @miraiedu_bot.'
+      );
+    } catch (err: any) {
+      setNotifyError(err?.message || 'Не удалось отправить уведомление об оплате.');
+    } finally {
+      setIsNotifying(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-dark-950 text-slate-100 selection:bg-brand selection:text-white">
@@ -101,7 +255,7 @@ export function App() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Полноэкранный Telegram Mini App, умный бот для заказов прямо в чате и удобная веб-панель для мерчанта. Прием платежей через Uzcard, Humo, Click, Payme, Visa и Telegram Stars в один клик.
+            Полноэкранный Telegram Mini App, умный бот для заказов прямо в чате и удобная веб-панель для мерчанта. Встроенный приём платежей через Paynet QR-Online (Uzcard, Humo, 0% комиссия для самозанятых и бизнеса) в один клик.
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
@@ -385,9 +539,9 @@ export function App() {
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                 <CreditCard className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Все способы оплаты</h3>
+              <h3 className="text-lg font-semibold text-white">Paynet QR-Online (0% комиссия)</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Поддержка карт Uzcard, Humo, международных карт Visa/Mastercard через Stripe и Telegram Stars ⭐.
+                Приём оплаты по Uzcard и Humo через Paynet QR-Online — с 0% комиссией для самозанятых и бизнеса в Узбекистане. Покупатели платят по QR или прямой ссылке в один тап.
               </p>
             </div>
 
@@ -477,9 +631,14 @@ export function App() {
                   Для быстрого старта
                 </span>
                 <h3 className="text-xl font-bold text-white">Базовый чат-бот</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-white">$20</span>
-                  <span className="text-xs text-slate-400">/ месяц</span>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold text-white">$20</span>
+                    <span className="text-xs text-slate-400">/ месяц</span>
+                  </div>
+                  <div className="text-xs font-medium text-emerald-400 mt-1 tabular">
+                    255 000 сум / мес по Paynet QR-Online
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400">
                   Каталог товаров и прием заказов в сообщениях Telegram.
@@ -496,23 +655,22 @@ export function App() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Уведомления мерчанту о заказах</span>
+                    <span>Оплата заказов через Paynet QR-Online (0%)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Панель управления товарами</span>
+                    <span>Панель управления товарами и заказами</span>
                   </li>
                 </ul>
               </div>
 
-              <a
-                href={BOT_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
+              <button
+                type="button"
+                onClick={() => openPaymentModal('BASIC_20')}
+                className="w-full py-3 rounded-xl border border-white/15 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
               >
-                Подключить бота
-              </a>
+                Оплатить и подключить
+              </button>
             </div>
 
             {/* Pro Mini App Plan (Featured) */}
@@ -526,9 +684,14 @@ export function App() {
                   Максимум продаж
                 </span>
                 <h3 className="text-xl font-bold text-white">Pro Mini App</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-white">$30</span>
-                  <span className="text-xs text-slate-400">/ месяц</span>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold text-white">$30</span>
+                    <span className="text-xs text-slate-400">/ месяц</span>
+                  </div>
+                  <div className="text-xs font-medium text-emerald-400 mt-1 tabular">
+                    385 000 сум / мес по Paynet QR-Online
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400">
                   Полноэкранная витрина Telegram Mini App с персональным дизайном.
@@ -549,7 +712,7 @@ export function App() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
-                    <span>Оплата в 1 клик (Click, Payme, Cards, Stars)</span>
+                    <span>Оплата в 1 клик через Paynet QR-Online (Uzcard, Humo, 0%)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
@@ -558,14 +721,13 @@ export function App() {
                 </ul>
               </div>
 
-              <a
-                href={BOT_URL}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => openPaymentModal('PRO_30')}
                 className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark text-center text-xs font-bold text-white shadow-lg shadow-brand/20 transition-all active:scale-95"
               >
-                Запустить Pro Mini App
-              </a>
+                Оплатить и подключить
+              </button>
             </div>
 
             {/* Standalone Lifetime Plan */}
@@ -575,9 +737,14 @@ export function App() {
                   Для крупных брендов
                 </span>
                 <h3 className="text-xl font-bold text-white">Standalone VPS</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-extrabold text-white">$350</span>
-                  <span className="text-xs text-slate-400">разово навсегда</span>
+                <div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-extrabold text-white">$350</span>
+                    <span className="text-xs text-slate-400">разово навсегда</span>
+                  </div>
+                  <div className="text-xs font-medium text-emerald-400 mt-1 tabular">
+                    4 500 000 сум разово по Paynet QR-Online
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400">
                   Автономный сервер, полный доступ к коду и базе данных.
@@ -598,19 +765,18 @@ export function App() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Прямое подключение эквайринга</span>
+                    <span>Встроенный Paynet QR-Online и кастомные интеграции</span>
                   </li>
                 </ul>
               </div>
 
-              <a
-                href={BOT_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
+              <button
+                type="button"
+                onClick={() => openPaymentModal('STANDALONE_LIFETIME')}
+                className="w-full py-3 rounded-xl border border-white/15 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
               >
-                Получить Standalone
-              </a>
+                Оплатить и подключить
+              </button>
             </div>
           </div>
         </div>
@@ -635,7 +801,7 @@ export function App() {
             },
             {
               q: 'Какие платежные системы поддерживаются в Узбекистане?',
-              a: 'Вы можете принимать платежи наличными или через перевод при получении, подключить карты Uzcard/Humo через эквайринг, международные карты Visa/Mastercard через Stripe или принимать Telegram Stars ⭐.',
+              a: 'Платформа оснащена встроенной оплатой через Paynet QR-Online (Uzcard, Humo и приложение Paynet) с комиссией 0% для самозанятых и бизнеса в Узбекистане. Укажите вашу ссылку Paynet QR-Online в админке — покупатели смогут оплачивать по QR или прямой ссылке в один клик прямо в боте и Mini App.',
             },
             {
               q: 'Могу ли я загружать товары и менять цены с телефона?',
@@ -691,6 +857,207 @@ export function App() {
           <div>© 2026 Mirai Commerce. Все права защищены.</div>
         </div>
       </footer>
+
+      {/* Paynet Tariff Payment Modal */}
+      {selectedPlan && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={() => !isNotifying && setSelectedPlan(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-white/15 bg-dark-900 p-6 shadow-2xl space-y-5 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold mb-1.5">
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Paynet QR-Online · 0% комиссия</span>
+                </div>
+                <h3 className="text-lg font-bold text-white">
+                  {TARIFF_DETAILS[selectedPlan].name}
+                </h3>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-extrabold text-white tabular">
+                    {TARIFF_DETAILS[selectedPlan].usdPrice}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {TARIFF_DETAILS[selectedPlan].period}
+                  </span>
+                  <span className="text-sm font-semibold text-emerald-400 tabular">
+                    · {TARIFF_DETAILS[selectedPlan].uzsPrice}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedPlan(null)}
+                disabled={isNotifying}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Plan Switcher Pills */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-dark-950 border border-white/10">
+              {(['BASIC_20', 'PRO_30', 'STANDALONE_LIFETIME'] as const).map((planKey) => (
+                <button
+                  key={planKey}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPlan(planKey);
+                    setNotifySuccess(null);
+                    setNotifyError(null);
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition-colors ${
+                    selectedPlan === planKey
+                      ? 'bg-brand text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {planKey === 'BASIC_20'
+                    ? 'Basic $20'
+                    : planKey === 'PRO_30'
+                    ? 'Pro $30'
+                    : 'VPS $350'}
+                </button>
+              ))}
+            </div>
+
+            {/* QR Code & Direct Paynet Links */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-dark-950 border border-white/10">
+              <div className="w-40 h-40 rounded-xl bg-white p-2 flex items-center justify-center shrink-0">
+                {qrLoadError ? (
+                  <div className="text-center space-y-1.5 px-2">
+                    <QrCode className="w-8 h-8 text-emerald-600 mx-auto" />
+                    <p className="text-[11px] font-semibold text-zinc-900">
+                      QR-код недоступен
+                    </p>
+                    <p className="text-[10px] text-zinc-500">
+                      Нажмите «Перейти в Paynet»
+                    </p>
+                  </div>
+                ) : (
+                  <img
+                    src={PAYNET_QR_IMAGE_URL}
+                    alt="Paynet QR-Online"
+                    onError={() => setQrLoadError(true)}
+                    className="w-full h-full object-contain"
+                  />
+                )}
+              </div>
+
+              <div className="flex-1 space-y-2.5 w-full">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Отсканируйте QR в приложении Paynet (или Uzcard / Humo) и оплатите{' '}
+                  <strong className="text-white">
+                    {TARIFF_DETAILS[selectedPlan].uzsPrice}
+                  </strong>
+                  .
+                </p>
+
+                <a
+                  href={PLATFORM_PAYNET_QR_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>⚡ Перейти в Paynet для оплаты</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={handleCopyPaynetLink}
+                  className="w-full py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-slate-200 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400 font-semibold">Скопировано!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Скопировать ссылку Paynet</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Notification Form & Bot Activation */}
+            <form onSubmit={handleConfirmPayment} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    Email или Telegram (@username)
+                  </label>
+                  <input
+                    type="text"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="owner@shop.uz / @username"
+                    className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    Название магазина (необязательно)
+                  </label>
+                  <input
+                    type="text"
+                    value={storeName}
+                    onChange={(e) => setStoreName(e.target.value)}
+                    placeholder="MODA Tashkent"
+                    className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                  />
+                </div>
+              </div>
+
+              {notifySuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{notifySuccess}</span>
+                </div>
+              )}
+
+              {notifyError && (
+                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{notifyError}</span>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={isNotifying}
+                  className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-brand/20 transition-all"
+                >
+                  {isNotifying
+                    ? 'Отправка уведомления…'
+                    : '✅ Я оплатил — уведомить администратора'}
+                </button>
+
+                <a
+                  href={BOT_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-2.5 rounded-xl border border-white/15 hover:bg-white/5 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <span>🤖 Активировать магазин в @miraiedu_bot</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                </a>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,8 +2,10 @@ import { FastifyPluginAsync } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { prisma, getTenantDb } from '@telegram-commerce/database';
 import { adminAuthMiddleware } from '../middleware/adminAuth.js';
-import { encryptBotToken, generateWebhookSecret, getEnv, ORDER_STATUS, DEFAULT_THEME_CONFIG } from '@telegram-commerce/config';
-import { invalidateTenantBot } from '../services/botManager.js';
+import { encryptBotToken, generateWebhookSecret, getEnv, ORDER_STATUS, DEFAULT_THEME_CONFIG, isHttpsUrl } from '@telegram-commerce/config';
+import { t } from '@telegram-commerce/i18n';
+import { invalidateTenantBot, getOrInitBot } from '../services/botManager.js';
+import { cancelReservationExpiry } from '../services/reservationWorker.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // Merchant Auth: Registration
@@ -21,6 +23,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: 'Email, password, and storeName are required' });
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingUser = await prisma.adminUser.findFirst({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingUser) {
+      return reply.status(409).send({
+        error: 'Этот email уже зарегистрирован. Пожалуйста, войдите в аккаунт или используйте другой email.',
+      });
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const webhookSecret = generateWebhookSecret();
 
@@ -34,17 +47,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           create: {
             bot_token_encrypted: encryptBotToken('PLACEHOLDER_TOKEN_TO_UPDATE'),
             webhook_secret: webhookSecret,
-            currency: 'USD',
+            currency: 'UZS',
             theme_config: {
+              ...DEFAULT_THEME_CONFIG,
               storeName,
-              primaryColor: '#0ea5e9',
-              description: `Official ${storeName} Telegram Store`,
+              description: `Официальный Telegram-магазин ${storeName}`,
             },
           },
         },
         adminUsers: {
           create: {
-            email,
+            email: normalizedEmail,
             password_hash: passwordHash,
             role: 'OWNER',
           },
@@ -78,9 +91,10 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     };
   }>('/api/v1/admin/auth/login', async (req, reply) => {
     const { email, password } = req.body;
+    const normalizedEmail = (email || '').trim().toLowerCase();
 
     const adminUser = await prisma.adminUser.findFirst({
-      where: { email },
+      where: { email: normalizedEmail },
       include: { tenant: true },
     });
 
@@ -204,10 +218,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         images?: string[];
         category?: string;
         isActive?: boolean;
+        is_active?: boolean;
       };
     }>('/api/v1/admin/products', async (req, reply) => {
       const tenantDb = getTenantDb(req.tenantId);
       const { title, description, price, stock, images, category, isActive } = req.body;
+      const resolvedActive = isActive !== undefined ? isActive : (req.body as any).is_active;
 
       const product = await tenantDb.product.create({
         data: {
@@ -217,7 +233,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           stock: stock ?? 0,
           images: images || [],
           category: category || 'General',
-          is_active: isActive !== undefined ? isActive : true,
+          is_active: resolvedActive !== undefined ? Boolean(resolvedActive) : true,
         } as any,
       });
 
@@ -234,11 +250,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         images?: string[];
         category?: string;
         isActive?: boolean;
+        is_active?: boolean;
       };
     }>('/api/v1/admin/products/:id', async (req, reply) => {
       const tenantDb = getTenantDb(req.tenantId);
       const { id } = req.params;
       const { title, description, price, stock, images, category, isActive } = req.body;
+      const resolvedActive = isActive !== undefined ? isActive : (req.body as any).is_active;
 
       const product = await tenantDb.product.update({
         where: { id },
@@ -249,7 +267,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           ...(stock !== undefined && { stock }),
           ...(images !== undefined && { images }),
           ...(category !== undefined && { category }),
-          ...(isActive !== undefined && { is_active: isActive }),
+          ...(resolvedActive !== undefined && { is_active: Boolean(resolvedActive) }),
         },
       });
 
@@ -411,10 +429,89 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = req.params;
       const { status } = req.body;
 
-      const order = await tenantDb.order.update({
+      const validStatuses = Object.values(ORDER_STATUS) as string[];
+      if (!status || !validStatuses.includes(status)) {
+        return reply.status(400).send({ error: 'Invalid order status' });
+      }
+
+      const existingOrder = await tenantDb.order.findFirst({
         where: { id },
-        data: { status: status as any },
       });
+
+      if (!existingOrder) {
+        return reply.status(404).send({ error: 'Order not found' });
+      }
+
+      if (existingOrder.status === status) {
+        return reply.send({ order: existingOrder });
+      }
+
+      const order = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.order.updateMany({
+          where: {
+            id,
+            tenant_id: req.tenantId,
+            status: existingOrder.status as any,
+          },
+          data: { status: status as any },
+        });
+
+        if (
+          updateResult.count === 1 &&
+          existingOrder.status === ORDER_STATUS.PENDING &&
+          status === ORDER_STATUS.CANCELLED
+        ) {
+          const items = Array.isArray(existingOrder.items) ? (existingOrder.items as any[]) : [];
+          for (const item of items) {
+            const qty = Number(item?.quantity || 0);
+            if (item?.productId && qty > 0) {
+              await tx.$executeRaw`
+                UPDATE "Product"
+                SET "stock" = "stock" + ${qty}
+                WHERE "id" = ${String(item.productId)}
+                  AND "tenant_id" = ${req.tenantId}
+              `;
+            }
+          }
+        }
+
+        return tx.order.findFirst({
+          where: { id, tenant_id: req.tenantId },
+        });
+      });
+
+      if (existingOrder.status === ORDER_STATUS.PENDING && status !== ORDER_STATUS.PENDING) {
+        await cancelReservationExpiry(id);
+      }
+
+      const notifyKeyMap: Record<string, string> = {
+        [ORDER_STATUS.PAID]: 'orders.notify_paid',
+        [ORDER_STATUS.DELIVERED]: 'orders.notify_delivered',
+        [ORDER_STATUS.CANCELLED]: 'orders.notify_cancelled',
+      };
+      const notifyKey = notifyKeyMap[status];
+
+      if (
+        notifyKey &&
+        order &&
+        order.customer_telegram_id &&
+        /^\d+$/.test(order.customer_telegram_id)
+      ) {
+        try {
+          const botData = await getOrInitBot(req.tenantId);
+          if (botData) {
+            const message = t('ru', notifyKey, { orderId: order.id.slice(0, 8) });
+            await botData.bot.api.sendMessage(order.customer_telegram_id, message, {
+              parse_mode: 'HTML',
+            });
+          }
+        } catch (notifyErr) {
+          req.log.warn(
+            { notifyErr },
+            `Failed to notify customer ${order.customer_telegram_id} about order ${order.id} status ${status}`
+          );
+        }
+      }
 
       return reply.send({ order });
     });
@@ -506,7 +603,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             bot_token_encrypted: encryptedToken,
             bot_username: botUsername,
             webhook_secret: webhookSecret,
-            currency: 'USD',
+            currency: 'UZS',
+            theme_config: DEFAULT_THEME_CONFIG,
           },
           update: {
             bot_token_encrypted: encryptedToken,
@@ -521,6 +619,39 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           `https://api.telegram.org/bot${botToken}/setWebhook?url=${encodeURIComponent(webhookUrl)}&secret_token=${webhookSecret}`
         );
         const hookData = (await setHookRes.json()) as any;
+
+        // Register standard bot commands
+        await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            commands: [
+              { command: 'start', description: 'Главное меню' },
+              { command: 'catalog', description: 'Каталог товаров' },
+              { command: 'cart', description: 'Корзина' },
+              { command: 'orders', description: 'Мои заказы' },
+              { command: 'webapp', description: 'Открыть магазин' },
+              { command: 'lang', description: 'Сменить язык' },
+              { command: 'help', description: 'Помощь' },
+            ],
+          }),
+        }).catch(() => {});
+
+        // Configure Mini App menu button when HTTPS URL is available
+        if (isHttpsUrl(env.PUBLIC_MINIAPP_URL)) {
+          const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=${req.tenantId}`;
+          await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              menu_button: {
+                type: 'web_app',
+                text: '🛍️ Открыть магазин',
+                web_app: { url: miniappUrl },
+              },
+            }),
+          }).catch(() => {});
+        }
 
         await invalidateTenantBot(req.tenantId);
 

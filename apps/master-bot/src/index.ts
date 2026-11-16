@@ -4,6 +4,8 @@ import { getEnv } from '@telegram-commerce/config';
 export { createMasterBot, type MasterBotContext };
 export * from './handlers/sales.js';
 export * from './handlers/demo.js';
+export * from './handlers/pricing.js';
+export * from './handlers/chatBotDemo.js';
 export * from './conversations/onboarding.js';
 
 export async function startMasterBotRunner(token?: string) {
@@ -26,6 +28,7 @@ export async function startMasterBotRunner(token?: string) {
           { command: 'start', description: '🚀 Platform Overview & Plans' },
           { command: 'catalog', description: '🛍️ Browse Demo Store' },
           { command: 'demo', description: '📱 Interactive Demos (Mini App & Admin)' },
+          { command: 'pricing', description: '💳 Тарифы и оплата' },
           { command: 'newstore', description: '⚡ Create Your Own Store' },
           { command: 'admin', description: '👑 Superadmin Control Center' },
         ]);

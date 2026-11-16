@@ -28,6 +28,7 @@ export interface CheckoutResult {
   currency: string;
   payment: PaymentSessionResult;
   paynetQrUrl?: string;
+  provider?: PaymentSessionResult['provider'];
 }
 
 /**
@@ -46,7 +47,13 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
     throw new Error('Tenant storefront is not active or unavailable');
   }
 
-  const currency = tenantData.tenant.currency || 'USD';
+  const currency = tenantData.tenant.currency || 'UZS';
+  const env = getEnv();
+  const hasStripeKey = Boolean(env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.includes('placeholder'));
+  const resolvedPaymentMethod =
+    !paymentMethod || (paymentMethod === PAYMENT_METHODS.STRIPE && !hasStripeKey)
+      ? PAYMENT_METHODS.PAYNET_XOLIS
+      : paymentMethod;
 
   // 2. Interactive transaction with atomic stock decrement
   const order = await prisma.$transaction(async (tx) => {
@@ -111,7 +118,7 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
         shipping_address: shippingAddress || 'Digital / Default delivery',
         total_amount: totalAmount as any,
         status: ORDER_STATUS.PENDING as any,
-        payment_method: paymentMethod || 'STRIPE',
+        payment_method: resolvedPaymentMethod,
         items: fullItemsDetails as any,
       },
     });
@@ -131,14 +138,16 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
     items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
   });
 
-  const env = getEnv();
   const defaultSuccessUrl = params.successUrl || `${env.PUBLIC_API_URL}/api/v1/shop/orders/${order.id}/success`;
   const defaultCancelUrl = params.cancelUrl || `${env.PUBLIC_API_URL}/api/v1/shop/orders/${order.id}/cancel`;
 
   let paymentResult: PaymentSessionResult;
   let paynetQrUrl: string | undefined;
 
-  if (paymentMethod === 'PAYNET_XOLIS') {
+  if (
+    resolvedPaymentMethod === PAYMENT_METHODS.PAYNET_XOLIS ||
+    (paymentMethod === PAYMENT_METHODS.STRIPE && !hasStripeKey)
+  ) {
     const rawQr =
       (tenantData.tenant.themeConfig as any)?.paynetQrUrl ||
       DEFAULT_PAYNET_QR_URL;
@@ -149,7 +158,7 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
       paymentUrl: paynetQrUrl,
       provider: 'paynet',
     };
-  } else if (paymentMethod === 'STRIPE' && env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.includes('placeholder')) {
+  } else if (resolvedPaymentMethod === PAYMENT_METHODS.STRIPE && hasStripeKey) {
     try {
       paymentResult = await createOrderCheckoutSession({
         orderId: order.id,
@@ -189,6 +198,7 @@ export async function createCheckoutOrder(params: CheckoutParams): Promise<Check
     currency,
     payment: paymentResult,
     paynetQrUrl,
+    provider: paymentResult.provider,
   };
 }
 
@@ -220,8 +230,13 @@ export async function fulfillOrder(orderId: string, paymentId?: string): Promise
   try {
     const botData = await getOrInitBot(order.tenant_id);
     if (botData) {
-      const items = Array.isArray(order.items) ? (order.items as any[]) : [];
-      const currency = order.tenant.botConfig?.currency || 'USD';
+      const rawItems = Array.isArray(order.items) ? (order.items as any[]) : [];
+      const items = rawItems.map((i) => ({
+        title: String(i?.title || 'Товар'),
+        quantity: Number(i?.quantity || 1),
+        price: Number(i?.price || 0),
+      }));
+      const currency = order.tenant.botConfig?.currency || 'UZS';
 
       if (order.tenant.owner_telegram_id) {
         await sendMerchantOrderAlert(botData.bot, order.tenant.owner_telegram_id, {
@@ -255,14 +270,22 @@ export async function fulfillOrder(orderId: string, paymentId?: string): Promise
  * Handles customer's "I Paid via Paynet" confirmation.
  * Marks the order as PAID and alerts merchant via Telegram.
  */
-export async function confirmPaynetPayment(orderId: string): Promise<{ success: boolean; order: any }> {
+export async function confirmPaynetPayment(orderId: string, tenantId?: string): Promise<{ success: boolean; order: any }> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { tenant: { include: { botConfig: true } } },
   });
 
-  if (!order) {
+  if (!order || (tenantId && order.tenant_id !== tenantId)) {
     throw new Error('Order not found');
+  }
+
+  if (order.status === ORDER_STATUS.PAID) {
+    return { success: true, order };
+  }
+
+  if (order.status === ORDER_STATUS.CANCELLED) {
+    throw new Error('Order has been cancelled');
   }
 
   // Cancel reservation timer
@@ -281,7 +304,12 @@ export async function confirmPaynetPayment(orderId: string): Promise<{ success: 
   try {
     const botData = await getOrInitBot(order.tenant_id);
     if (botData) {
-      const items = Array.isArray(order.items) ? (order.items as any[]) : [];
+      const rawItems = Array.isArray(order.items) ? (order.items as any[]) : [];
+      const items = rawItems.map((i) => ({
+        title: String(i?.title || 'Товар'),
+        quantity: Number(i?.quantity || 1),
+        price: Number(i?.price || 0),
+      }));
       const currency = order.tenant.botConfig?.currency || 'UZS';
 
       if (order.tenant.owner_telegram_id) {

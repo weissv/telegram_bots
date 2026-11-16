@@ -32,6 +32,8 @@ export interface TenantInfo {
     logoUrl?: string;
     primaryColor?: string;
     description?: string;
+    paynetEnabled?: boolean;
+    paynetQrUrl?: string;
   };
 }
 

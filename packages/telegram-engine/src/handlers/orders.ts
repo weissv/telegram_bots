@@ -6,7 +6,7 @@ export async function handleOrders(ctx: BotContext) {
   const { db, tenant, from } = ctx;
   const locale = ctx.locale;
   const telegramUserId = from?.id ? String(from.id) : '';
-  const currency = tenant.currency || 'USD';
+  const currency = tenant.currency || 'UZS';
 
   if (!telegramUserId) {
     await ctx.reply('Unable to retrieve user information.');

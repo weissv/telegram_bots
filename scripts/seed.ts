@@ -7,7 +7,10 @@ async function main() {
 
   const demoTenantId = process.env.STANDALONE_TENANT_ID || '00000000-0000-0000-0000-000000000001';
   const ownerTelegramId = process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
-  const botToken = process.env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0';
+  const botToken =
+    process.env.MASTER_BOT_TOKEN ||
+    process.env.STANDALONE_BOT_TOKEN ||
+    'PLACEHOLDER_BOT_TOKEN';
   const passwordHash = await bcrypt.hash('password123', 10);
   const webhookSecret = generateWebhookSecret();
   const encryptedToken = encryptBotToken(botToken);

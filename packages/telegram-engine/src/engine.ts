@@ -1,8 +1,10 @@
 import { Bot, session } from 'grammy';
 import Redis from 'ioredis';
 import { BotContext, SessionData, TenantInfo, CartItem } from './types.js';
-import { getTenantDb } from '@telegram-commerce/database';
+import { getTenantDb, prisma } from '@telegram-commerce/database';
+import { ORDER_STATUS } from '@telegram-commerce/config';
 import { t, detectLocale, type Locale } from '@telegram-commerce/i18n';
+import { sendMerchantOrderAlert, sendCustomerOrderReceipt } from './notifications/adminAlerts.js';
 import { createRedisSessionStorage } from './session/redisStorage.js';
 import { handleStart, handleLanguageSelection } from './handlers/start.js';
 import { handleCatalog } from './handlers/catalog.js';
@@ -193,20 +195,243 @@ export function createTenantBot(options: CreateTenantBotOptions): Bot<BotContext
 
     if (data.startsWith('order:pay:')) {
       const orderId = data.substring(10);
+      const locale = ctx.locale;
       try {
-        await ctx.db.order.update({
+        const existingOrder = await ctx.db.order.findFirst({
           where: { id: orderId },
-          data: { status: 'PAID' as any, payment_id: 'instant_demo_pay' },
         });
-        await ctx.answerCallbackQuery({ text: '✅ Оплата успешно подтверждена!' });
-        await ctx.reply(
-          `🎉 <b>Заказ #${orderId.slice(0, 8)} успешно оплачен!</b>\n\n` +
-          `Мерчант уведомлен и собирает заказ.\n` +
-          `Используйте команду /orders для просмотра деталей.`,
-          { parse_mode: 'HTML' }
-        );
+
+        if (!existingOrder) {
+          await ctx.answerCallbackQuery({
+            text: locale === 'uz' ? 'Buyurtma topilmadi' : locale === 'en' ? 'Order not found' : 'Заказ не найден',
+            show_alert: true,
+          });
+          return;
+        }
+
+        if (existingOrder.status === ORDER_STATUS.PAID) {
+          await ctx.answerCallbackQuery({
+            text:
+              locale === 'uz'
+                ? "✅ Buyurtma allaqachon to'langan!"
+                : locale === 'en'
+                  ? '✅ Order is already paid!'
+                  : '✅ Заказ уже оплачен!',
+          });
+          return;
+        }
+
+        if (existingOrder.status === ORDER_STATUS.CANCELLED) {
+          await ctx.answerCallbackQuery({
+            text:
+              locale === 'uz'
+                ? '❌ Buyurtma bekor qilingan'
+                : locale === 'en'
+                  ? '❌ Order was cancelled'
+                  : '❌ Заказ был отменён',
+            show_alert: true,
+          });
+          return;
+        }
+
+        const updatedOrder = await ctx.db.order.update({
+          where: { id: orderId },
+          data: {
+            status: ORDER_STATUS.PAID as any,
+            payment_id: 'paynet_' + Date.now(),
+          },
+        });
+
+        const items = (Array.isArray(updatedOrder.items) ? updatedOrder.items : []).map((i: any) => ({
+          title: String(i?.title || 'Товар'),
+          quantity: Number(i?.quantity || 1),
+          price: Number(i?.price || 0),
+        }));
+        const currency = ctx.tenant.currency || 'UZS';
+        const totalAmount = Number(updatedOrder.total_amount);
+
+        if (ctx.tenant.ownerTelegramId) {
+          await sendMerchantOrderAlert(bot, ctx.tenant.ownerTelegramId, {
+            orderId: updatedOrder.id,
+            totalAmount,
+            currency,
+            customerTelegramId: updatedOrder.customer_telegram_id,
+            customerName: updatedOrder.customer_name || undefined,
+            shippingAddress: updatedOrder.shipping_address || undefined,
+            customerPhone: updatedOrder.customer_phone || undefined,
+            items,
+          });
+        }
+
+        const customerChatId =
+          updatedOrder.customer_telegram_id && /^\d+$/.test(updatedOrder.customer_telegram_id)
+            ? updatedOrder.customer_telegram_id
+            : ctx.from?.id
+              ? String(ctx.from.id)
+              : '';
+
+        if (customerChatId) {
+          await sendCustomerOrderReceipt(bot, customerChatId, {
+            orderId: updatedOrder.id,
+            totalAmount,
+            currency,
+            items,
+          });
+        }
+
+        await ctx.answerCallbackQuery({
+          text:
+            locale === 'uz'
+              ? "✅ To'lov tasdiqlandi!"
+              : locale === 'en'
+                ? '✅ Payment confirmed!'
+                : '✅ Оплата успешно подтверждена!',
+        });
       } catch (err: any) {
-        await ctx.answerCallbackQuery({ text: `Ошибка: ${err?.message || 'Не удалось обновить заказ'}`, show_alert: true });
+        await ctx.answerCallbackQuery({
+          text: `Ошибка: ${err?.message || 'Не удалось обновить заказ'}`.slice(0, 190),
+          show_alert: true,
+        });
+      }
+      return;
+    }
+
+    if (data.startsWith('merchant:order:deliver:')) {
+      const orderId = data.substring(23);
+      if (ctx.tenant.ownerTelegramId && String(ctx.from?.id || '') !== String(ctx.tenant.ownerTelegramId)) {
+        await ctx.answerCallbackQuery({
+          text: '⛔ Доступно только владельцу магазина',
+          show_alert: true,
+        });
+        return;
+      }
+
+      try {
+        const existingOrder = await ctx.db.order.findFirst({
+          where: { id: orderId },
+        });
+
+        if (!existingOrder) {
+          await ctx.answerCallbackQuery({ text: 'Заказ не найден', show_alert: true });
+          return;
+        }
+
+        if (existingOrder.status === ORDER_STATUS.DELIVERED) {
+          await ctx.answerCallbackQuery({ text: '🚚 Заказ уже отмечен как доставленный' });
+          return;
+        }
+
+        if (existingOrder.status === ORDER_STATUS.CANCELLED) {
+          await ctx.answerCallbackQuery({ text: '❌ Отменённый заказ нельзя доставить', show_alert: true });
+          return;
+        }
+
+        const updatedOrder = await ctx.db.order.update({
+          where: { id: orderId },
+          data: { status: ORDER_STATUS.DELIVERED as any },
+        });
+
+        if (updatedOrder.customer_telegram_id && /^\d+$/.test(updatedOrder.customer_telegram_id)) {
+          await bot.api
+            .sendMessage(
+              updatedOrder.customer_telegram_id,
+              t('ru', 'orders.notify_delivered', { orderId: orderId.slice(0, 8) }),
+              { parse_mode: 'HTML' }
+            )
+            .catch((err) => {
+              console.warn(`Failed to notify customer on order deliver ${orderId}:`, err);
+            });
+        }
+
+        await ctx.answerCallbackQuery({ text: '🚚 Статус заказа: Доставлен' });
+      } catch (err: any) {
+        await ctx.answerCallbackQuery({
+          text: `Ошибка: ${err?.message || 'Не удалось обновить заказ'}`.slice(0, 190),
+          show_alert: true,
+        });
+      }
+      return;
+    }
+
+    if (data.startsWith('merchant:order:cancel:')) {
+      const orderId = data.substring(22);
+      if (ctx.tenant.ownerTelegramId && String(ctx.from?.id || '') !== String(ctx.tenant.ownerTelegramId)) {
+        await ctx.answerCallbackQuery({
+          text: '⛔ Доступно только владельцу магазина',
+          show_alert: true,
+        });
+        return;
+      }
+
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const existing = await tx.order.findFirst({
+            where: { id: orderId, tenant_id: ctx.tenant.id },
+          });
+
+          if (!existing) {
+            return { status: 'not_found' as const, order: null };
+          }
+
+          const updateRes = await tx.order.updateMany({
+            where: {
+              id: orderId,
+              tenant_id: ctx.tenant.id,
+              status: { not: ORDER_STATUS.CANCELLED as any },
+            },
+            data: { status: ORDER_STATUS.CANCELLED as any },
+          });
+
+          if (updateRes.count === 1) {
+            const items = Array.isArray(existing.items) ? (existing.items as any[]) : [];
+            for (const item of items) {
+              const productId = item?.productId || item?.id;
+              const qty = Number(item?.quantity || 0);
+              if (productId && qty > 0) {
+                await tx.$executeRaw`
+                  UPDATE "Product"
+                  SET "stock" = "stock" + ${qty}
+                  WHERE "id" = ${String(productId)}
+                    AND "tenant_id" = ${ctx.tenant.id}
+                `;
+              }
+            }
+          }
+
+          return {
+            status: updateRes.count === 1 ? ('cancelled' as const) : ('already_cancelled' as const),
+            order: existing,
+          };
+        });
+
+        if (result.status === 'not_found') {
+          await ctx.answerCallbackQuery({ text: 'Заказ не найден', show_alert: true });
+          return;
+        }
+
+        if (result.status === 'already_cancelled') {
+          await ctx.answerCallbackQuery({ text: '❌ Заказ уже отменён' });
+          return;
+        }
+
+        if (result.order?.customer_telegram_id && /^\d+$/.test(result.order.customer_telegram_id)) {
+          await bot.api
+            .sendMessage(
+              result.order.customer_telegram_id,
+              t('ru', 'orders.notify_cancelled', { orderId: orderId.slice(0, 8) }),
+              { parse_mode: 'HTML' }
+            )
+            .catch((err) => {
+              console.warn(`Failed to notify customer on order cancel ${orderId}:`, err);
+            });
+        }
+
+        await ctx.answerCallbackQuery({ text: '❌ Заказ отменён, остатки возвращены' });
+      } catch (err: any) {
+        await ctx.answerCallbackQuery({
+          text: `Ошибка: ${err?.message || 'Не удалось отменить заказ'}`.slice(0, 190),
+          show_alert: true,
+        });
       }
       return;
     }

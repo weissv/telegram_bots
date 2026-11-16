@@ -56,6 +56,8 @@ export const en: TranslationDictionary = {
   'checkout.total': '💰 <b>Total:</b> <b>{total}</b>',
   'checkout.pay_prompt': 'Click the button below for secure payment.',
   'checkout.pay_now': '💳 Pay Now',
+  'checkout.paynet_btn': '⚡ Pay with Paynet (0% fee)',
+  'checkout.paynet_instructions': '1️⃣ Tap <b>"Pay with Paynet"</b> below\n2️⃣ Complete payment for the exact amount (0% fee)\n3️⃣ Return to the bot and tap <b>"I Paid the Order"</b>',
   'checkout.failed': 'Checkout error: {error}',
 
   // ─── Orders ───
@@ -67,6 +69,9 @@ export const en: TranslationDictionary = {
   'orders.status_delivered': '🚚 Delivered',
   'orders.status_cancelled': '❌ Cancelled',
   'orders.order_line': '🧾 <b>Order #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Status:</b> {status}\n💰 <b>Total:</b> <code>{total}</code>\n📦 <i>Items: {items}</i>',
+  'orders.notify_paid': '✅ <b>Payment confirmed for Order #{orderId}!</b>\n\nWe are now preparing your order for shipping.',
+  'orders.notify_delivered': '🚚 <b>Order #{orderId} has been delivered!</b>\n\nThank you for shopping with us!',
+  'orders.notify_cancelled': '❌ <b>Order #{orderId} has been cancelled.</b>\n\nPlease contact the store if you have any questions.',
 
   // ─── WebApp ───
   'webapp.launch': '🚀 Launch interactive store below:',
@@ -115,10 +120,16 @@ export const en: TranslationDictionary = {
 
   // ─── Categories ───
   'category.all': 'All Products',
+  'category.general': 'General',
   'category.apparel': 'Apparel',
   'category.footwear': 'Footwear',
   'category.accessories': 'Accessories',
   'category.electronics': 'Electronics',
+  'category.общее': 'General',
+  'category.одежда': 'Apparel',
+  'category.обувь': 'Footwear',
+  'category.аксессуары': 'Accessories',
+  'category.электроника': 'Electronics',
 
   // ─── Product Card & Detail ───
   'product.out_of_stock': 'Out of Stock',

@@ -1,11 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PAYNET_QR_URL, DEFAULT_THEME_CONFIG, PAYMENT_METHODS } from '@telegram-commerce/config';
+import {
+  DEFAULT_PAYNET_QR_URL,
+  PLATFORM_PAYNET_QR_URL,
+  DEFAULT_THEME_CONFIG,
+  PAYMENT_METHODS,
+  PLAN_PRICING,
+  PLAN_TIERS,
+} from '@telegram-commerce/config';
+import { t, SUPPORTED_LOCALES } from '@telegram-commerce/i18n';
+import { translateCategory } from '../../apps/miniapp/src/i18n/useI18n.js';
+
+const EXACT_PAYNET_QR_URL =
+  "https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO'PAYNET'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65";
 
 describe('Paynet Xolis Configuration & Standards', () => {
-  it('should have a valid Central Bank / Soliq QR-online Paynet link configured', () => {
-    expect(DEFAULT_PAYNET_QR_URL).toContain('https://app.paynet.uz/qr-online/');
-    expect(DEFAULT_PAYNET_QR_URL).toContain('qr-online.uz');
-    expect(DEFAULT_PAYNET_QR_URL).toContain('PAYNET');
+  it('should match the exact Central Bank / Soliq QR-online Paynet URL on both DEFAULT and PLATFORM constants', () => {
+    expect(DEFAULT_PAYNET_QR_URL).toBe(EXACT_PAYNET_QR_URL);
+    expect(PLATFORM_PAYNET_QR_URL).toBe(EXACT_PAYNET_QR_URL);
+    expect(PLATFORM_PAYNET_QR_URL).toBe(DEFAULT_PAYNET_QR_URL);
   });
 
   it('should include PAYNET_XOLIS in supported payment methods', () => {
@@ -15,9 +27,65 @@ describe('Paynet Xolis Configuration & Standards', () => {
     expect(PAYMENT_METHODS.MOCK).toBe('MOCK');
   });
 
-  it('should have Paynet enabled by default in storefront theme configuration', () => {
+  it('should configure UZS and Paynet enabled by default in storefront theme configuration', () => {
+    expect(DEFAULT_THEME_CONFIG.currency).toBe('UZS');
+    expect(DEFAULT_THEME_CONFIG.currencySymbol).toBe("so'm");
     expect(DEFAULT_THEME_CONFIG.paynetEnabled).toBe(true);
-    expect(DEFAULT_THEME_CONFIG.paynetQrUrl).toBe(DEFAULT_PAYNET_QR_URL);
+    expect(DEFAULT_THEME_CONFIG.paynetQrUrl).toBe(EXACT_PAYNET_QR_URL);
+  });
+
+  it('should define exact USD and UZS prices for all subscription plans', () => {
+    expect(PLAN_PRICING[PLAN_TIERS.BASIC_20].price).toBe(20);
+    expect(PLAN_PRICING[PLAN_TIERS.BASIC_20].priceUzs).toBe(255000);
+
+    expect(PLAN_PRICING[PLAN_TIERS.PRO_30].price).toBe(30);
+    expect(PLAN_PRICING[PLAN_TIERS.PRO_30].priceUzs).toBe(385000);
+
+    expect(PLAN_PRICING[PLAN_TIERS.STANDALONE_LIFETIME].price).toBe(350);
+    expect(PLAN_PRICING[PLAN_TIERS.STANDALONE_LIFETIME].priceUzs).toBe(4500000);
+  });
+
+  it('should provide Paynet checkout and order notification localization keys in all 3 locales', () => {
+    const requiredKeys = [
+      'checkout.paynet_btn',
+      'checkout.paynet_confirm_btn',
+      'checkout.paynet_instructions',
+      'orders.notify_paid',
+      'orders.notify_delivered',
+      'orders.notify_cancelled',
+    ];
+
+    for (const locale of SUPPORTED_LOCALES) {
+      for (const key of requiredKeys) {
+        const value = t(locale, key, { orderId: 'abc12345' });
+        expect(value, `Missing or untranslated key ${key} for locale ${locale}`).not.toBe(key);
+        expect(value.length).toBeGreaterThan(0);
+      }
+
+      expect(t(locale, 'orders.notify_paid', { orderId: 'abc12345' })).toContain('#abc12345');
+      expect(t(locale, 'orders.notify_delivered', { orderId: 'abc12345' })).toContain('#abc12345');
+      expect(t(locale, 'orders.notify_cancelled', { orderId: 'abc12345' })).toContain('#abc12345');
+    }
+  });
+
+  it('should translate Russian and English product categories and fall back cleanly for unknown categories', () => {
+    expect(t('ru', 'category.одежда')).toBe('Одежда');
+    expect(t('uz', 'category.одежда')).toBe('Kiyimlar');
+    expect(t('en', 'category.одежда')).toBe('Apparel');
+
+    expect(t('ru', 'category.общее')).toBe('Общее');
+    expect(t('uz', 'category.общее')).toBe('Umumiy');
+    expect(t('en', 'category.общее')).toBe('General');
+
+    const enTranslate = (key: string, params?: Record<string, string | number>) => t('en', key, params);
+    expect(translateCategory(enTranslate, 'All')).toBe('All Products');
+    expect(translateCategory(enTranslate, 'Одежда')).toBe('Apparel');
+    expect(translateCategory(enTranslate, 'Общее')).toBe('General');
+    expect(translateCategory(enTranslate, 'Обувь')).toBe('Footwear');
+    expect(translateCategory(enTranslate, 'Аксессуары')).toBe('Accessories');
+    expect(translateCategory(enTranslate, 'Электроника')).toBe('Electronics');
+    expect(translateCategory(enTranslate, 'Vintage Watches')).toBe('Vintage Watches');
+    expect(translateCategory(enTranslate, '')).toBe('');
   });
 });
 

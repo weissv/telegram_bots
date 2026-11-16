@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 import { Product } from '../types/index.js';
-import { useI18n } from '../i18n/useI18n.js';
+import { useI18n, translateCategory } from '../i18n/useI18n.js';
 
 interface ProductModalProps {
   product: Product | null;
@@ -40,9 +40,7 @@ export function ProductModal({
   const unitPrice = Number(product.price);
   const totalPrice = unitPrice * qty;
 
-  const categoryTranslated = product.category
-    ? t(`category.${product.category.toLowerCase()}`) || product.category
-    : '';
+  const categoryTranslated = translateCategory(t, product.category);
 
   const handleIncrement = () => {
     if (qty < product.stock) {

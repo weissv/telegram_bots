@@ -56,6 +56,8 @@ export const uz: TranslationDictionary = {
   'checkout.total': '💰 <b>Jami:</b> <b>{total}</b>',
   'checkout.pay_prompt': "Xavfsiz to'lov uchun quyidagi tugmani bosing.",
   'checkout.pay_now': "💳 To'lash",
+  'checkout.paynet_btn': "⚡ Paynet orqali to'lash (0% komissiya)",
+  'checkout.paynet_instructions': "1️⃣ Quyidagi <b>«Paynet orqali to'lash»</b> tugmasini bosing\n2️⃣ Buyurtma summasini to'lang (0% komissiya)\n3️⃣ Botga qaytib, <b>«Buyurtmani to'ladim»</b> tugmasini bosing",
   'checkout.failed': "Buyurtma xatosi: {error}",
 
   // ─── Orders ───
@@ -67,6 +69,9 @@ export const uz: TranslationDictionary = {
   'orders.status_delivered': '🚚 Yetkazildi',
   'orders.status_cancelled': '❌ Bekor qilindi',
   'orders.order_line': "🧾 <b>Buyurtma #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Holat:</b> {status}\n💰 <b>Summa:</b> <code>{total}</code>\n📦 <i>Mahsulotlar: {items}</i>",
+  'orders.notify_paid': "✅ <b>#{orderId} buyurtma to'lovi tasdiqlandi!</b>\n\nBuyurtmangizni jo'natishga tayyorlamoqdamiz.",
+  'orders.notify_delivered': "🚚 <b>#{orderId} buyurtma yetkazib berildi!</b>\n\nXaridingiz uchun rahmat! Yana kutib qolamiz.",
+  'orders.notify_cancelled': "❌ <b>#{orderId} buyurtma bekor qilindi.</b>\n\nSavollaringiz bo'lsa, do'kon bilan bog'laning.",
 
   // ─── WebApp ───
   'webapp.launch': "🚀 Quyida interaktiv do'konni oching:",
@@ -115,10 +120,16 @@ export const uz: TranslationDictionary = {
 
   // ─── Categories ───
   'category.all': 'Barcha mahsulotlar',
+  'category.general': 'Umumiy',
   'category.apparel': 'Kiyimlar',
   'category.footwear': 'Poyabzal',
   'category.accessories': 'Aksessuarlar',
   'category.electronics': 'Elektronika',
+  'category.общее': 'Umumiy',
+  'category.одежда': 'Kiyimlar',
+  'category.обувь': 'Poyabzal',
+  'category.аксессуары': 'Aksessuarlar',
+  'category.электроника': 'Elektronika',
 
   // ─── Product Card & Detail ───
   'product.out_of_stock': 'Mavjud emas',

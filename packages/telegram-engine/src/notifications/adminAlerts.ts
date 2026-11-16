@@ -1,5 +1,5 @@
-import { Bot } from 'grammy';
-import { BotContext } from '../types.js';
+import { Bot, InlineKeyboard } from 'grammy';
+import { formatCurrency } from '@telegram-commerce/i18n';
 
 export interface OrderNotificationPayload {
   orderId: string;
@@ -26,10 +26,11 @@ export async function sendMerchantOrderAlert(
 ) {
   if (!merchantTelegramId) return;
 
+  const currency = order.currency || 'UZS';
   const itemsList = order.items
     .map(
       (item) =>
-        `  • <b>${escapeHtml(item.title)}</b> × ${item.quantity} — <code>${item.price.toFixed(2)} ${order.currency}</code>`
+        `  • <b>${escapeHtml(item.title)}</b> × ${item.quantity} — <code>${formatCurrency(Number(item.price), currency, 'ru')}</code>`
     )
     .join('\n');
 
@@ -37,7 +38,7 @@ export async function sendMerchantOrderAlert(
 🎉 <b>ПОЛУЧЕН НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ!</b>
 
 🧾 <b>Номер заказа:</b> <code>#${order.orderId.slice(0, 8)}</code>
-💰 <b>Сумма к получению:</b> <b>${order.totalAmount.toFixed(2)} ${order.currency}</b>
+💰 <b>Сумма к получению:</b> <b>${formatCurrency(Number(order.totalAmount), currency, 'ru')}</b>
 👤 <b>Покупатель:</b> ${escapeHtml(order.customerName || 'Пользователь Telegram')} (<code>${order.customerTelegramId}</code>)
 ${order.customerPhone ? `📞 <b>Телефон:</b> ${escapeHtml(order.customerPhone)}\n` : ''}${order.shippingAddress ? `📍 <b>Адрес доставки:</b> ${escapeHtml(order.shippingAddress)}\n` : ''}
 📦 <b>Состав заказа:</b>
@@ -46,9 +47,15 @@ ${itemsList}
 ⚡ <i>Управляйте заказом и меняйте статус в вашей панели управления.</i>
 `.trim();
 
+  const keyboard = new InlineKeyboard()
+    .text('🚚 Заказ доставлен', `merchant:order:deliver:${order.orderId}`)
+    .row()
+    .text('❌ Отменить заказ', `merchant:order:cancel:${order.orderId}`);
+
   try {
     await bot.api.sendMessage(merchantTelegramId, text, {
       parse_mode: 'HTML',
+      reply_markup: keyboard,
     });
   } catch (err) {
     console.error(`Failed to send merchant order alert to ${merchantTelegramId}:`, err);
@@ -76,10 +83,11 @@ export async function sendCustomerOrderReceipt(
 ) {
   if (!customerTelegramId) return;
 
+  const currency = receipt.currency || 'UZS';
   const itemsList = receipt.items
     .map(
       (item) =>
-        `  • <b>${escapeHtml(item.title)}</b> × ${item.quantity} — <code>${item.price.toFixed(2)} ${receipt.currency}</code>`
+        `  • <b>${escapeHtml(item.title)}</b> × ${item.quantity} — <code>${formatCurrency(Number(item.price), currency, 'ru')}</code>`
     )
     .join('\n');
 
@@ -87,7 +95,7 @@ export async function sendCustomerOrderReceipt(
 ✅ <b>ОПЛАТА УСПЕШНО ПОЛУЧЕНА!</b>
 
 🧾 <b>Заказ:</b> <code>#${receipt.orderId.slice(0, 8)}</code>
-💰 <b>Сумма:</b> <b>${receipt.totalAmount.toFixed(2)} ${receipt.currency}</b>
+💰 <b>Сумма:</b> <b>${formatCurrency(Number(receipt.totalAmount), currency, 'ru')}</b>
 
 📦 <b>Содержимое заказа:</b>
 ${itemsList}

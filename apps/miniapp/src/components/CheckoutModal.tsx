@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CreditCard, Star, QrCode } from 'lucide-react';
+import { X, QrCode, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { CartItem } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
 
@@ -20,6 +20,21 @@ interface CheckoutModalProps {
   isProcessing: boolean;
 }
 
+const PAYNET_TRUST_COPY = {
+  ru: {
+    channels: 'Uzcard · Humo · Visa · Приложение Paynet',
+    note: 'После оформления откроется QR-код и прямая ссылка Paynet QR-Online (0% комиссия). Товар резервируется автоматически.',
+  },
+  uz: {
+    channels: 'Uzcard · Humo · Visa · Paynet ilovasi',
+    note: "Rasmiylashtirishdan so'ng Paynet QR-Online kodi va to'g'ridan-to'g'ri havola ochiladi (0% komissiya). Mahsulot avtomatik band qilinadi.",
+  },
+  en: {
+    channels: 'Uzcard · Humo · Visa · Paynet App',
+    note: 'You will receive a Paynet QR-Online code and direct payment link (0% commission). Items are reserved automatically.',
+  },
+} as const;
+
 export function CheckoutModal({
   isOpen,
   onClose,
@@ -27,11 +42,10 @@ export function CheckoutModal({
   currency,
   totalAmount,
   initialTelegramUser,
-  paynetEnabled = true,
   onConfirmOrder,
   isProcessing,
 }: CheckoutModalProps) {
-  const { t, formatCurrency } = useI18n();
+  const { t, locale, formatCurrency } = useI18n();
 
   const [customerName, setCustomerName] = useState(() => {
     if (initialTelegramUser) {
@@ -43,9 +57,11 @@ export function CheckoutModal({
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'PAYNET_XOLIS' | 'STRIPE' | 'MOCK' | 'TELEGRAM_STARS'>('PAYNET_XOLIS');
+  const [paymentMethod] = useState<'PAYNET_XOLIS'>('PAYNET_XOLIS');
 
   if (!isOpen) return null;
+
+  const trustCopy = PAYNET_TRUST_COPY[locale] || PAYNET_TRUST_COPY.ru;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,120 +166,42 @@ export function CheckoutModal({
             </div>
           </div>
 
-          {/* Payment Methods */}
+          {/* Payment Method: Paynet Xolis Only */}
           <div className="space-y-2 pt-2">
             <div className="text-xs font-semibold text-[var(--c-hint)] uppercase tracking-wide">
               {t('checkout.payment_method')}
             </div>
 
-            <div className="space-y-1.5">
-              {paynetEnabled && (
-                <label
-                  onClick={() => setPaymentMethod('PAYNET_XOLIS')}
-                  className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                    paymentMethod === 'PAYNET_XOLIS'
-                      ? 'border-emerald-500 bg-emerald-500/10'
-                      : 'border-[var(--c-separator)] bg-[var(--c-section)]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-4 h-4 rounded-full border border-emerald-500 flex items-center justify-center">
-                      {paymentMethod === 'PAYNET_XOLIS' && (
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1.5">
-                        <QrCode className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{t('checkout.pay_paynet_title')}</span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-500/15 text-emerald-600 rounded">
-                          0%
-                        </span>
-                      </div>
-                      <div className="text-xs text-[var(--c-hint)]">
-                        {t('checkout.pay_paynet_desc')}
-                      </div>
-                    </div>
+            <div className="p-3.5 rounded-xl border border-emerald-500/60 bg-emerald-500/10 space-y-2.5">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <QrCode className="w-4 h-4" />
                   </div>
-                </label>
-              )}
-
-              <label
-                onClick={() => setPaymentMethod('MOCK')}
-                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                  paymentMethod === 'MOCK'
-                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
-                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
-                    {paymentMethod === 'MOCK' && (
-                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-[var(--c-text)]">
-                      {t('checkout.pay_mock_title')}
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold text-[var(--c-text)] flex items-center gap-1.5 flex-wrap">
+                      <span>{t('checkout.pay_paynet_title')}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 rounded">
+                        0%
+                      </span>
                     </div>
                     <div className="text-xs text-[var(--c-hint)]">
-                      {t('checkout.pay_mock_desc')}
+                      {t('checkout.pay_paynet_desc')}
                     </div>
                   </div>
                 </div>
-              </label>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              </div>
 
-              <label
-                onClick={() => setPaymentMethod('TELEGRAM_STARS')}
-                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                  paymentMethod === 'TELEGRAM_STARS'
-                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
-                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
-                    {paymentMethod === 'TELEGRAM_STARS' && (
-                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1">
-                      <span>{t('checkout.pay_stars_title')}</span>
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                    </div>
-                    <div className="text-xs text-[var(--c-hint)]">
-                      {t('checkout.pay_stars_desc')}
-                    </div>
-                  </div>
+              <div className="pt-2 border-t border-emerald-500/20 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                  <span>{trustCopy.channels}</span>
                 </div>
-              </label>
-
-              <label
-                onClick={() => setPaymentMethod('STRIPE')}
-                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
-                  paymentMethod === 'STRIPE'
-                    ? 'border-[var(--c-brand)] bg-[var(--c-secondary)]'
-                    : 'border-[var(--c-separator)] bg-[var(--c-section)]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-4 h-4 rounded-full border flex items-center justify-center">
-                    {paymentMethod === 'STRIPE' && (
-                      <div className="w-2 h-2 rounded-full bg-[var(--c-brand)]" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-[var(--c-text)] flex items-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5 text-[var(--c-hint)]" />
-                      <span>{t('checkout.pay_stripe_title')}</span>
-                    </div>
-                    <div className="text-xs text-[var(--c-hint)]">
-                      {t('checkout.pay_stripe_desc')}
-                    </div>
-                  </div>
-                </div>
-              </label>
+                <p className="text-[11px] leading-relaxed text-[var(--c-hint)]">
+                  {trustCopy.note}
+                </p>
+              </div>
             </div>
           </div>
 

@@ -1,19 +1,33 @@
 import { prisma } from '@telegram-commerce/database';
 import bcrypt from 'bcryptjs';
-import { encryptBotToken, generateWebhookSecret, PLAN_TIERS, getEnv } from '@telegram-commerce/config';
+import { encryptBotToken, generateWebhookSecret, PLAN_TIERS, DEFAULT_PAYNET_QR_URL, getEnv } from '@telegram-commerce/config';
 
 export async function ensureDatabaseSeeded(): Promise<void> {
   try {
     const env = getEnv();
     const demoTenantId = env.STANDALONE_TENANT_ID || '00000000-0000-0000-0000-000000000001';
     const ownerTelegramId = env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
-    const botToken = env.MASTER_BOT_TOKEN || '8524216143:AAE1XYNOpSrGicGW2VmC4u883_bzIN1JzT0';
+    const botToken = env.MASTER_BOT_TOKEN || env.STANDALONE_BOT_TOKEN || 'PLACEHOLDER_BOT_TOKEN';
     const passwordHash = await bcrypt.hash('password123', 10);
     const webhookSecret = generateWebhookSecret();
     const encryptedToken = encryptBotToken(botToken);
 
     const storeName = 'MODA Tashkent • Concept Store';
     const storeDesc = 'Премиальная одежда и аксессуары из 100% узбекского хлопка и натуральной кожи с доставкой по Ташкенту и Узбекистану.';
+    const demoThemeConfig = {
+      storeName,
+      primaryColor: '#1a6fd4',
+      accentColor: '#38bdf8',
+      backgroundColor: '#ffffff',
+      textColor: '#18181b',
+      bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      logoUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80',
+      description: storeDesc,
+      currency: 'UZS',
+      currencySymbol: "so'm",
+      paynetEnabled: true,
+      paynetQrUrl: DEFAULT_PAYNET_QR_URL,
+    };
 
     // Upsert Demo Tenant with Tashkent branding
     const tenant = await prisma.tenant.upsert({
@@ -30,16 +44,7 @@ export async function ensureDatabaseSeeded(): Promise<void> {
             bot_username: 'miraiedu_bot',
             webhook_secret: webhookSecret,
             currency: 'UZS',
-            theme_config: {
-              storeName,
-              primaryColor: '#1a6fd4',
-              accentColor: '#38bdf8',
-              backgroundColor: '#ffffff',
-              textColor: '#18181b',
-              bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-              logoUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80',
-              description: storeDesc,
-            },
+            theme_config: demoThemeConfig,
           },
         },
         adminUsers: {
@@ -57,40 +62,32 @@ export async function ensureDatabaseSeeded(): Promise<void> {
       },
     });
 
-    // Update botConfig theme & currency
-    await prisma.botConfig.upsert({
+    // Preserve existing botConfig theme_config & currency on restart; only refresh token when MASTER_BOT_TOKEN is configured
+    const existingBotConfig = await prisma.botConfig.findUnique({
       where: { tenant_id: demoTenantId },
-      create: {
-        tenant_id: demoTenantId,
-        bot_token_encrypted: encryptedToken,
-        bot_username: 'miraiedu_bot',
-        webhook_secret: webhookSecret,
-        currency: 'UZS',
-        theme_config: {
-          storeName,
-          primaryColor: '#1a6fd4',
-          accentColor: '#38bdf8',
-          backgroundColor: '#ffffff',
-          textColor: '#18181b',
-          bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-          logoUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80',
-          description: storeDesc,
-        },
-      },
-      update: {
-        currency: 'UZS',
-        theme_config: {
-          storeName,
-          primaryColor: '#1a6fd4',
-          accentColor: '#38bdf8',
-          backgroundColor: '#ffffff',
-          textColor: '#18181b',
-          bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-          logoUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=200&q=80',
-          description: storeDesc,
-        },
-      },
     });
+
+    if (existingBotConfig) {
+      if (env.MASTER_BOT_TOKEN && !env.MASTER_BOT_TOKEN.toLowerCase().includes('placeholder')) {
+        await prisma.botConfig.update({
+          where: { tenant_id: demoTenantId },
+          data: {
+            bot_token_encrypted: encryptBotToken(env.MASTER_BOT_TOKEN),
+          },
+        });
+      }
+    } else {
+      await prisma.botConfig.create({
+        data: {
+          tenant_id: demoTenantId,
+          bot_token_encrypted: encryptedToken,
+          bot_username: 'miraiedu_bot',
+          webhook_secret: webhookSecret,
+          currency: 'UZS',
+          theme_config: demoThemeConfig,
+        },
+      });
+    }
 
     console.log(`✅ Demo tenant active: ${tenant.name} (${tenant.id}), owner: ${ownerTelegramId}`);
 

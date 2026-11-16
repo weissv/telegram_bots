@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Minus } from 'lucide-react';
 import { Product } from '../types/index.js';
-import { useI18n } from '../i18n/useI18n.js';
+import { useI18n, translateCategory } from '../i18n/useI18n.js';
 
 interface ProductCardProps {
   product: Product;
@@ -26,9 +26,7 @@ export function ProductCard({
     product.images?.[0] ||
     'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=400&q=80';
 
-  const categoryTranslated = product.category
-    ? t(`category.${product.category.toLowerCase()}`) || product.category
-    : '';
+  const categoryTranslated = translateCategory(t, product.category);
 
   return (
     <div
