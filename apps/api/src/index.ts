@@ -3,9 +3,13 @@ import { getEnv } from '@telegram-commerce/config';
 import { initBillingWorker } from './services/billingWorker.js';
 import { initReservationWorker } from './services/reservationWorker.js';
 import { ensureDatabaseSeeded } from './services/seedService.js';
+import { ensureSchemaMigrated } from './services/schemaService.js';
 
 async function main() {
   const env = getEnv();
+
+  // 0. Ensure PostgreSQL enum values and columns are safely migrated before seeding or queries
+  await ensureSchemaMigrated();
 
   // 1. Ensure database has demo store and superadmin initialized
   await ensureDatabaseSeeded();
