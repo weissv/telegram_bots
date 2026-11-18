@@ -9,11 +9,11 @@ import {
   Search,
   Download,
   Upload,
-  FileSpreadsheet,
   CheckCircle,
   AlertCircle,
   Eye,
   EyeOff,
+  ImagePlus,
   X,
 } from 'lucide-react';
 import { Modal } from '@telegram-commerce/ui';
@@ -25,11 +25,60 @@ interface ParsedProductRow {
   category: string;
   price: number;
   stock: number;
+  variants: string[];
   description: string;
   imageUrl: string;
   isActive: boolean;
   isValid: boolean;
   error?: string;
+}
+
+function parseVariantsInput(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(',')) {
+    const clean = part.trim();
+    if (clean && !seen.has(clean)) {
+      seen.add(clean);
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+async function compressImageToDataUrl(file: File, maxDimension = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл изображения'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Файл не является корректным изображением'));
+      img.onload = () => {
+        const { width, height } = img;
+        const scale = Math.min(1, maxDimension / Math.max(width, height));
+        const targetW = Math.max(1, Math.round(width * scale));
+        const targetH = Math.max(1, Math.round(height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas недоступен в браузере'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        let dataUrl = canvas.toDataURL('image/webp', 0.82);
+        if (!dataUrl.startsWith('data:image/webp')) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        }
+        resolve(dataUrl);
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export function Products({ currency = 'UZS' }: { currency?: string }) {
@@ -45,10 +94,13 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
   const [price, setPrice] = useState('290000');
   const [stock, setStock] = useState('50');
   const [category, setCategory] = useState('Одежда');
+  const [variantsInput, setVariantsInput] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const imageUploadRef = useRef<HTMLInputElement>(null);
 
   // Bulk Operations State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -86,7 +138,8 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
     setPrice('290000');
     setStock('50');
     setCategory('Одежда');
-    setImageUrl('https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=600&q=80');
+    setVariantsInput('');
+    setImageUrl('');
     setIsActive(true);
     setErrorMsg(null);
     setIsModalOpen(true);
@@ -99,10 +152,30 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
     setPrice(String(p.price));
     setStock(String(p.stock));
     setCategory(p.category || 'Общее');
+    setVariantsInput(Array.isArray(p.variants) ? p.variants.join(', ') : '');
     setImageUrl(p.images?.[0] || '');
     setIsActive(p.is_active);
     setErrorMsg(null);
     setIsModalOpen(true);
+  };
+
+  const handleImageFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorMsg(null);
+    setIsCompressingImage(true);
+    try {
+      const compressedDataUrl = await compressImageToDataUrl(file, 800);
+      setImageUrl(compressedDataUrl);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Не удалось обработать изображение');
+    } finally {
+      setIsCompressingImage(false);
+      if (imageUploadRef.current) {
+        imageUploadRef.current.value = '';
+      }
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -129,7 +202,8 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
         price: parseFloat(price) || 0,
         stock: parseInt(stock, 10) || 0,
         category,
-        images: imageUrl ? [imageUrl] : [],
+        variants: parseVariantsInput(variantsInput),
+        images: imageUrl.trim() ? [imageUrl.trim()] : [],
         is_active: isActive,
       };
 
@@ -219,13 +293,14 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
       return;
     }
 
-    const headers = ['ID', 'Название', 'Категория', 'Цена', 'Остаток', 'Описание', 'Изображение', 'Активен'];
+    const headers = ['ID', 'Название', 'Категория', 'Цена', 'Остаток', 'Варианты', 'Описание', 'Изображение', 'Активен'];
     const rows = products.map((p) => [
       p.id,
       p.title,
       p.category || 'Общее',
       p.price,
       p.stock,
+      Array.isArray(p.variants) ? p.variants.join(', ') : '',
       p.description || '',
       (p.images && p.images[0]) || '',
       p.is_active ? 'Да' : 'Нет',
@@ -254,7 +329,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
 
   // ─── CSV Template Download ("Скачать образец") ───
   const handleDownloadTemplate = () => {
-    const headers = ['ID', 'Название', 'Категория', 'Цена', 'Остаток', 'Описание', 'Изображение', 'Активен'];
+    const headers = ['ID', 'Название', 'Категория', 'Цена', 'Остаток', 'Варианты', 'Описание', 'Изображение', 'Активен'];
     const sampleRows = [
       [
         '',
@@ -262,6 +337,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
         'Одежда',
         '420000',
         '35',
+        'S, M, L, XL',
         'Плотный футер 420г/м² из 100% узбекского хлопка пенье. Мягкий начес, глубокий капюшон.',
         'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80',
         'Да',
@@ -272,6 +348,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
         'Обувь',
         '650000',
         '20',
+        '39, 40, 41, 42',
         'Натуральная матовая телячья кожа, анатомическая стелька с поддержкой стопы.',
         'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
         'Да',
@@ -282,6 +359,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
         'Аксессуары',
         '140000',
         '45',
+        '',
         'Плотный саржевый хлопок, металлическая застежка-регулятор, вентиляционные люверсы.',
         'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=800&q=80',
         'Да',
@@ -353,6 +431,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
     const catIdx = getIndex(['категория', 'category', 'раздел']);
     const priceIdx = getIndex(['цена', 'price', 'стоимость']);
     const stockIdx = getIndex(['остаток', 'stock', 'количество', 'кол-во', 'qty']);
+    const variantsIdx = getIndex(['вариант', 'размер', 'variant', 'size']);
     const descIdx = getIndex(['описание', 'description', 'инфо']);
     const imgIdx = getIndex(['изображение', 'image', 'фото', 'картинка', 'img']);
     const activeIdx = getIndex(['активен', 'active', 'статус', 'status']);
@@ -370,6 +449,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
       const rowPrice = parseFloat(rawPrice);
       const rawStock = stockIdx !== -1 ? parseInt(cols[stockIdx].replace(/\D/g, ''), 10) : 0;
       const rowStock = isNaN(rawStock) ? 0 : rawStock;
+      const rowVariants = variantsIdx !== -1 && cols[variantsIdx] ? parseVariantsInput(cols[variantsIdx]) : [];
       const rowDescription = descIdx !== -1 && cols[descIdx] ? cols[descIdx].trim() : '';
       const rowImageUrl = imgIdx !== -1 && cols[imgIdx] ? cols[imgIdx].trim() : '';
       const rawActive = activeIdx !== -1 && cols[activeIdx] ? cols[activeIdx].toLowerCase() : 'да';
@@ -392,6 +472,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
         category: rowCategory,
         price: isNaN(rowPrice) ? 0 : rowPrice,
         stock: rowStock,
+        variants: rowVariants,
         description: rowDescription,
         imageUrl: rowImageUrl,
         isActive: rowIsActive,
@@ -438,6 +519,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
           category: r.category,
           price: r.price,
           stock: r.stock,
+          variants: r.variants,
           description: r.description,
           images: r.imageUrl ? [r.imageUrl] : [],
           isActive: r.isActive,
@@ -490,7 +572,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
             type="button"
             onClick={handleExportCsv}
             className="btn-secondary !h-9 text-xs"
-            title="Выгрузить весь каталог в CSV для Excel"
+            title="Выгрузить весь каталог в UTF-8 .csv"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Экспорт CSV</span>
@@ -505,7 +587,7 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
               setIsImportModalOpen(true);
             }}
             className="btn-secondary !h-9 text-xs"
-            title="Загрузить товары из CSV файла"
+            title="Загрузить товары из файла .csv (UTF-8)"
           >
             <Upload className="w-3.5 h-3.5" />
             <span>Импорт CSV</span>
@@ -647,6 +729,18 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
                           />
                           <div className="min-w-0">
                             <div className="font-medium text-ink truncate">{product.title}</div>
+                            {Array.isArray(product.variants) && product.variants.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {product.variants.map((v) => (
+                                  <span
+                                    key={v}
+                                    className="px-1.5 py-0.2 rounded bg-subtle border border-line text-[10px] text-ink"
+                                  >
+                                    {v}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {product.description && (
                               <div className="text-muted text-xs line-clamp-1">
                                 {product.description}
@@ -719,29 +813,34 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
       <Modal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        title="Пакетный импорт товаров (CSV / Excel)"
+        title="Пакетный импорт товаров (.csv UTF-8)"
       >
         <div className="space-y-4">
           <div className="p-3.5 rounded-md bg-subtle/70 border border-line text-xs space-y-2">
             <div className="font-semibold text-ink flex items-center justify-between">
-              <span>Инструкция по загрузке каталога</span>
+              <span>Инструкция по загрузке .csv файла (UTF-8)</span>
               <button
                 type="button"
                 onClick={handleDownloadTemplate}
                 className="link inline-flex items-center gap-1 font-medium text-xs"
               >
                 <Download className="w-3 h-3" />
-                <span>Скачать образец таблицы (.csv)</span>
+                <span>Скачать образец (.csv)</span>
               </button>
             </div>
             <p className="text-muted leading-relaxed">
-              Загрузите файл <code>.csv</code> с колонками: <b>Название, Категория, Цена, Остаток, Описание, Изображение</b>. Если указан <b>ID</b> существующего товара, система обновит его цену и остатки.
+              Принимаются текстовые файлы <code>.csv</code> в кодировке <b>UTF-8</b> (разделитель <code>;</code> или <code>,</code>). Колонки: <b>Название, Категория, Цена, Остаток, Варианты, Описание, Изображение</b>. Если указан <b>ID</b>, существующий товар будет обновлён.
             </p>
+            <div className="p-2 rounded bg-paper border border-line font-mono text-[11px] text-ink overflow-x-auto whitespace-nowrap">
+              Название;Категория;Цена;Остаток;Варианты;Описание
+              <br />
+              Худи Tashkent;Одежда;420000;35;S, M, L;Хлопок 100%
+            </div>
           </div>
 
           {/* File Picker */}
           <div>
-            <label className="label">Выберите файл CSV</label>
+            <label className="label">Выберите файл .csv (UTF-8)</label>
             <input
               ref={fileInputRef}
               type="file"
@@ -917,27 +1016,106 @@ export function Products({ currency = 'UZS' }: { currency?: string }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Категория</label>
+          <div>
+            <label className="label">Категория</label>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Одежда, Обувь, Аксессуары..."
+              className="input"
+            />
+          </div>
+
+          {/* Optional Variants / Sizes */}
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="label !mb-0">Варианты / размеры (необязательно)</label>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setVariantsInput('S, M, L, XL')}
+                  className="px-1.5 py-0.5 rounded border border-line hover:bg-subtle text-muted hover:text-ink"
+                >
+                  S–XL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVariantsInput('39, 40, 41, 42, 43')}
+                  className="px-1.5 py-0.5 rounded border border-line hover:bg-subtle text-muted hover:text-ink"
+                >
+                  39–43
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
+              value={variantsInput}
+              onChange={(e) => setVariantsInput(e.target.value)}
+              placeholder="Например: S, M, L или 39, 40, 41 (через запятую)"
+              className="input"
+            />
+            {parseVariantsInput(variantsInput).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {parseVariantsInput(variantsInput).map((v) => (
+                  <span
+                    key={v}
+                    className="px-2 py-0.5 rounded bg-subtle border border-line text-[11px] font-medium text-ink"
+                  >
+                    {v}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Image Upload (Mobile-friendly canvas compression) + URL Input */}
+          <div className="space-y-2">
+            <label className="label">Фотография товара</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <label className="btn-secondary !h-10 cursor-pointer shrink-0">
+                <ImagePlus className="w-4 h-4" />
+                <span>{isCompressingImage ? 'Сжатие…' : 'Загрузить фото'}</span>
+                <input
+                  ref={imageUploadRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileSelect}
+                  className="hidden"
+                />
+              </label>
+
               <input
                 type="text"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Одежда, Обувь, Аксессуары..."
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="label">URL изображения</label>
-              <input
-                type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://..."
-                className="input"
+                placeholder="Или вставьте URL https://..."
+                className="input flex-1"
               />
             </div>
+
+            {imageUrl && (
+              <div className="flex items-center gap-3 p-2 rounded-md border border-line bg-subtle/40">
+                <img
+                  src={imageUrl}
+                  alt="Предпросмотр"
+                  className="w-12 h-12 rounded object-cover border border-line bg-paper shrink-0"
+                />
+                <div className="flex-1 min-w-0 text-xs text-muted truncate">
+                  {imageUrl.startsWith('data:image/')
+                    ? `Сжатое фото (~${Math.max(1, Math.round((imageUrl.length * 0.75) / 1024))} КБ)`
+                    : imageUrl}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="p-1 text-muted hover:text-red-700"
+                  title="Удалить фото"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">

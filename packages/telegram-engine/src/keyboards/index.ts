@@ -1,7 +1,22 @@
+import crypto from 'node:crypto';
 import { InlineKeyboard, Keyboard } from 'grammy';
 import { TenantInfo, CartItem } from '../types.js';
 import { getEnv, PLAN_TIERS, isSafeTelegramUrl, isHttpsUrl } from '@telegram-commerce/config';
 import { t, type Locale } from '@telegram-commerce/i18n';
+
+/**
+ * Generates a deterministic callback-safe item key (<= 40 chars, fits 64-byte Telegram limit).
+ * Preserves raw productId when no variant is selected for backward compatibility.
+ */
+export function getCartItemKey(item: Pick<CartItem, 'productId' | 'variant'>): string {
+  const variant = (item.variant || '').trim();
+  if (!variant) {
+    return item.productId;
+  }
+  const compactId = item.productId.replace(/-/g, '');
+  const variantHash = crypto.createHash('sha1').update(variant).digest('hex').slice(0, 6);
+  return `${compactId}:${variantHash}`;
+}
 
 /**
  * Builds standard reply keyboard for bottom menu bar.
@@ -33,7 +48,37 @@ export function getMainMenuKeyboard(tenant: TenantInfo, locale: Locale): Keyboar
 }
 
 /**
- * Builds interactive paginated catalog inline keyboard with category filtering.
+ * Builds one-time reply keyboard with native Telegram contact share button.
+ */
+export function getPhoneRequestKeyboard(locale: Locale): Keyboard {
+  const shareLabel =
+    locale === 'uz'
+      ? '📞 Telefon raqamni yuborish'
+      : locale === 'en'
+        ? '📞 Share Phone Number'
+        : '📞 Отправить мой номер телефона';
+  const cancelLabel =
+    locale === 'uz'
+      ? '❌ Bekor qilish'
+      : locale === 'en'
+        ? '❌ Cancel'
+        : '❌ Отмена';
+
+  return new Keyboard()
+    .requestContact(shareLabel)
+    .row()
+    .text(cancelLabel)
+    .resized()
+    .oneTime();
+}
+
+export interface CatalogKeyboardOptions {
+  stock?: number;
+  variants?: string[];
+}
+
+/**
+ * Builds interactive paginated catalog inline keyboard with category filtering and variant selection.
  */
 export function getCatalogInlineKeyboard(
   productId: string,
@@ -41,7 +86,8 @@ export function getCatalogInlineKeyboard(
   totalPages: number,
   categories: string[],
   locale: Locale,
-  currentCategory?: string
+  currentCategory?: string,
+  options?: CatalogKeyboardOptions
 ): InlineKeyboard {
   const keyboard = new InlineKeyboard();
 
@@ -54,18 +100,39 @@ export function getCatalogInlineKeyboard(
     keyboard.row(...catButtons);
   }
 
-  // Add to cart button
-  keyboard.row(InlineKeyboard.text(t(locale, 'catalog.add_to_cart'), `cart:add:${productId}`));
+  const stock = options?.stock;
+  const variants = Array.isArray(options?.variants)
+    ? options.variants.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+
+  if (stock !== undefined && stock <= 0) {
+    keyboard.row(InlineKeyboard.text(t(locale, 'catalog.stock_out'), 'noop'));
+  } else if (variants.length > 0) {
+    const compactId = productId.replace(/-/g, '');
+    const visibleVariants = variants.slice(0, 8);
+    for (let i = 0; i < visibleVariants.length; i += 4) {
+      const chunk = visibleVariants.slice(i, i + 4).map((variantLabel, offset) => {
+        const idx = i + offset;
+        return InlineKeyboard.text(`🛒 ${variantLabel.slice(0, 14)}`, `cart:v:${compactId}:${idx}`);
+      });
+      keyboard.row(...chunk);
+    }
+  } else {
+    // Add to cart button
+    keyboard.row(InlineKeyboard.text(t(locale, 'catalog.add_to_cart'), `cart:add:${productId}`));
+  }
 
   // Pagination navigation row
   const navRow = [];
   if (page > 1) {
     navRow.push(InlineKeyboard.text(t(locale, 'catalog.prev'), `page:${page - 1}`));
   }
-  navRow.push(InlineKeyboard.text(
-    t(locale, 'catalog.page_of', { current: page, total: Math.max(1, totalPages) }),
-    'noop'
-  ));
+  navRow.push(
+    InlineKeyboard.text(
+      t(locale, 'catalog.page_of', { current: page, total: Math.max(1, totalPages) }),
+      'noop'
+    )
+  );
   if (page < totalPages) {
     navRow.push(InlineKeyboard.text(t(locale, 'catalog.next'), `page:${page + 1}`));
   }
@@ -83,7 +150,7 @@ export function getCatalogInlineKeyboard(
 /**
  * Builds interactive cart viewer inline keyboard.
  */
-export function getCartInlineKeyboard(cart: CartItem[], currency: string, locale: Locale): InlineKeyboard {
+export function getCartInlineKeyboard(cart: CartItem[], _currency: string, locale: Locale): InlineKeyboard {
   const keyboard = new InlineKeyboard();
 
   if (cart.length === 0) {
@@ -93,11 +160,15 @@ export function getCartInlineKeyboard(cart: CartItem[], currency: string, locale
 
   // Item adjustments
   cart.forEach((item) => {
+    const itemKey = getCartItemKey(item);
+    const shortTitle = item.variant
+      ? `${item.title.slice(0, 10)}(${item.variant.slice(0, 4)})`
+      : item.title.slice(0, 14);
     keyboard.row(
-      InlineKeyboard.text(`❌ ${item.title.slice(0, 14)}`, `cart:remove:${item.productId}`),
-      InlineKeyboard.text(`➖`, `cart:dec:${item.productId}`),
+      InlineKeyboard.text(`❌ ${shortTitle}`, `cart:remove:${itemKey}`),
+      InlineKeyboard.text('➖', `cart:dec:${itemKey}`),
       InlineKeyboard.text(`${item.quantity}`, 'noop'),
-      InlineKeyboard.text(`➕`, `cart:inc:${item.productId}`)
+      InlineKeyboard.text('➕', `cart:inc:${itemKey}`)
     );
   });
 
@@ -126,4 +197,3 @@ export function getUpgradeInlineKeyboard(locale: Locale): InlineKeyboard {
   }
   return keyboard;
 }
-

@@ -5,23 +5,41 @@ import { Dashboard } from './pages/Dashboard.js';
 import { Products } from './pages/Products.js';
 import { Orders } from './pages/Orders.js';
 import { Settings } from './pages/Settings.js';
-import { LayoutDashboard, Package, ShoppingBag, Settings as SettingsIcon, LogOut, ExternalLink, Store } from 'lucide-react';
+import { SubscriptionStatusBadge } from './components/Status.js';
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingBag,
+  Settings as SettingsIcon,
+  LogOut,
+  ExternalLink,
+  Store,
+} from 'lucide-react';
 import { MerchantProfile } from './types/index.js';
 
 type ActiveTab = 'dashboard' | 'products' | 'orders' | 'settings';
 
+function getInitialTab(): ActiveTab {
+  if (typeof window === 'undefined') return 'dashboard';
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  if (tab === 'products' || tab === 'orders' || tab === 'settings') {
+    return tab;
+  }
+  return 'dashboard';
+}
+
 function formatPlanName(plan?: string): string {
-  if (!plan) return 'Тариф Базовый';
+  if (!plan) return 'Тариф Basic';
   const p = plan.toUpperCase();
   if (p === 'PRO_30' || p === 'PRO') return 'Тариф Pro · $30/мес';
-  if (p === 'STANDALONE_LIFETIME' || p === 'STANDALONE') return 'Standalone Lifetime';
-  if (p === 'BASIC_20' || p === 'BASIC') return 'Тариф Базовый · $20/мес';
+  if (p === 'STANDALONE_LIFETIME' || p === 'STANDALONE') return 'Standalone VPS';
+  if (p === 'BASIC_20' || p === 'BASIC') return 'Тариф Basic · $20/мес';
   return `Тариф ${plan}`;
 }
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getAuthToken());
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getInitialTab);
   const [profile, setProfile] = useState<MerchantProfile | null>(null);
 
   const refreshProfile = useCallback(async () => {
@@ -57,6 +75,11 @@ export function App() {
 
   const currency = profile?.tenant?.botConfig?.currency || 'UZS';
   const tenantId = profile?.tenant?.id || 'demo-tenant';
+  const subscriptionStatus =
+    profile?.tenant?.subscriptionStatus ||
+    profile?.subscription?.status ||
+    profile?.latestSubscription?.status ||
+    profile?.tenant?.subscriptions?.[0]?.status;
   const storefrontUrl =
     typeof window !== 'undefined' && window.location.port === '5174'
       ? `http://localhost:5173?tenant_id=${tenantId}`
@@ -68,7 +91,7 @@ export function App() {
       <aside className="w-full md:w-64 bg-paper border-b md:border-b-0 md:border-r border-line flex flex-col justify-between shrink-0">
         <div>
           {/* Brand Header */}
-          <div className="p-5 border-b border-line">
+          <div className="p-5 border-b border-line space-y-2.5">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-md bg-ink text-paper flex items-center justify-center shrink-0">
                 <Store className="w-4 h-4" />
@@ -82,6 +105,11 @@ export function App() {
                 </p>
               </div>
             </div>
+            {subscriptionStatus && (
+              <div>
+                <SubscriptionStatusBadge status={subscriptionStatus} />
+              </div>
+            )}
           </div>
 
           {/* Navigation Links */}
@@ -173,7 +201,11 @@ export function App() {
           {activeTab === 'products' && <Products currency={currency} />}
           {activeTab === 'orders' && <Orders currency={currency} />}
           {activeTab === 'settings' && (
-            <Settings profile={profile} onProfileUpdated={refreshProfile} />
+            <Settings
+              profile={profile}
+              onProfileUpdated={refreshProfile}
+              onGoToProducts={() => setActiveTab('products')}
+            />
           )}
         </div>
       </main>

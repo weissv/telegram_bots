@@ -30,11 +30,23 @@ services:
     environment:
       POSTGRES_DB: telegram_commerce_standalone
       POSTGRES_USER: standalone_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-standalone_secure_password_123}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - standalone_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U standalone_user -d telegram_commerce_standalone"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: standalone_redis
+    restart: always
+    volumes:
+      - standalone_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -46,19 +58,27 @@ services:
     container_name: standalone_api
     restart: always
     environment:
+      NODE_ENV: production
       MODE: standalone
       PORT: 3000
       HOST: 0.0.0.0
-      STANDALONE_TENANT_ID: "00000000-0000-0000-0000-000000000001"
-      DATABASE_URL: postgresql://standalone_user:${DB_PASSWORD:-standalone_secure_password_123}@postgres:5432/telegram_commerce_standalone?schema=public
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-      JWT_SECRET: ${JWT_SECRET:-standalone_jwt_secret_987654321}
-      PUBLIC_API_URL: https://api.${DOMAIN_NAME}
-      PUBLIC_MINIAPP_URL: https://${DOMAIN_NAME}
-      PUBLIC_ADMIN_URL: https://admin.${DOMAIN_NAME}
+      STANDALONE_TENANT_ID: ${STANDALONE_TENANT_ID:-00000000-0000-0000-0000-000000000001}
+      STANDALONE_BOT_TOKEN: ${STANDALONE_BOT_TOKEN:?STANDALONE_BOT_TOKEN is required}
+      STANDALONE_ADMIN_TELEGRAM_ID: ${STANDALONE_ADMIN_TELEGRAM_ID:?STANDALONE_ADMIN_TELEGRAM_ID is required}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      DATABASE_URL: postgresql://standalone_user:${DB_PASSWORD:?DB_PASSWORD is required}@postgres:5432/telegram_commerce_standalone?schema=public
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://api.${DOMAIN_NAME:?DOMAIN_NAME is required}}
+      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-https://${DOMAIN_NAME:?DOMAIN_NAME is required}}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-https://admin.${DOMAIN_NAME:?DOMAIN_NAME is required}}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -95,4 +115,5 @@ services:
 
 volumes:
   standalone_pgdata:
+  standalone_redisdata:
   traefik_certs:

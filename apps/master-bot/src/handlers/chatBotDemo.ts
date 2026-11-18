@@ -1,6 +1,6 @@
 import { InlineKeyboard, type Context } from 'grammy';
 import { prisma } from '@telegram-commerce/database';
-import { getEnv, isHttpsUrl, isSafeTelegramUrl, DEFAULT_PAYNET_QR_URL } from '@telegram-commerce/config';
+import { getEnv, isHttpsUrl, isSafeTelegramUrl } from '@telegram-commerce/config';
 import { escapeHtml, formatUzs } from '../utils.js';
 
 interface DemoCartItem {
@@ -42,6 +42,7 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
         stock: 35,
         category: 'Одежда',
         images: ['https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=800&q=80'],
+        variants: [] as any,
         is_active: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -55,6 +56,7 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
         stock: 50,
         category: 'Одежда',
         images: ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80'],
+        variants: [] as any,
         is_active: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -68,6 +70,7 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
         stock: 20,
         category: 'Обувь',
         images: ['https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80'],
+        variants: [] as any,
         is_active: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -81,6 +84,7 @@ export async function handleChatBotDemoCatalog(ctx: Context, pageIndex = 0, isEd
         stock: 45,
         category: 'Аксессуары',
         images: ['https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=800&q=80'],
+        variants: [] as any,
         is_active: true,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -326,11 +330,8 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
   (ctx as any).session.chatDemoCart = [];
 
   const miniappUrl = `${env.PUBLIC_MINIAPP_URL}?tenant_id=demo-tenant`;
-  const paynetUrl = DEFAULT_PAYNET_QR_URL;
   const keyboard = new InlineKeyboard()
-    .url('⚡ Оплатить в Paynet (0% комиссия)', paynetUrl)
-    .row()
-    .text('✅ Я оплатил заказ', `chatdemo:pay:${order.id}`);
+    .text('✅ Симулировать оплату (Демо)', `chatdemo:pay:${order.id}`);
 
   if (isHttpsUrl(miniappUrl)) {
     keyboard.row().webApp('📱 Открыть витрину (Mini App)', miniappUrl);
@@ -354,10 +355,9 @@ export async function handleChatBotDemoCheckout(ctx: Context) {
 🚚 <b>Доставка:</b> Курьером по Ташкенту (в течение 3 часов)
 💳 <b>Оплата:</b> Paynet Xolis (0% комиссия)
 
-⚡ <b>Как оплатить через Paynet Xolis:</b>
-1. Нажмите кнопку «⚡ Оплатить в Paynet (0% комиссия)» ниже — откроется государственная система QR-Online (Soliq).
-2. Подтвердите платеж в приложении Paynet.
-3. Нажмите кнопку «✅ Я оплатил заказ», чтобы получить чек и уведомить владельца магазина.
+⚡ <b>Демо-режим (тестовая оплата):</b>
+В реальном магазине покупатель оплачивает по QR-коду продавца через Paynet Xolis (0% комиссия), после чего продавец подтверждает поступление средств.
+Нажмите «✅ Симулировать оплату (Демо)» ниже, чтобы увидеть чек покупателя и уведомление продавца.
 
 ━━━━━━━━━━━━━━━━━━━━
 Так работает стандартный <b>Базовый чат-бот ($20/мес)</b>.

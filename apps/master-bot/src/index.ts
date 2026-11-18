@@ -5,6 +5,7 @@ export { createMasterBot, type MasterBotContext };
 export * from './handlers/sales.js';
 export * from './handlers/demo.js';
 export * from './handlers/pricing.js';
+export * from './handlers/auth.js';
 export * from './handlers/chatBotDemo.js';
 export * from './conversations/onboarding.js';
 
@@ -26,10 +27,12 @@ export async function startMasterBotRunner(token?: string) {
       try {
         await bot.api.setMyCommands([
           { command: 'start', description: '🚀 Platform Overview & Plans' },
+          { command: 'login', description: '🔐 Войти в магазин / Ваши магазины' },
+          { command: 'resetpassword', description: '🔑 Сброс пароля Admin-панели' },
+          { command: 'newstore', description: '⚡ Подключить бота и создать магазин' },
+          { command: 'pricing', description: '💳 Тарифы и оплата' },
           { command: 'catalog', description: '🛍️ Browse Demo Store' },
           { command: 'demo', description: '📱 Interactive Demos (Mini App & Admin)' },
-          { command: 'pricing', description: '💳 Тарифы и оплата' },
-          { command: 'newstore', description: '⚡ Create Your Own Store' },
           { command: 'admin', description: '👑 Superadmin Control Center' },
         ]);
 

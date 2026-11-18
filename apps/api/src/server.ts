@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import path from 'path';
 import fs from 'fs';
 import { getEnv } from '@telegram-commerce/config';
+import { prisma } from '@telegram-commerce/database';
 import { webhookRoutes } from './routes/webhooks.js';
 import { shopRoutes } from './routes/shop.js';
 import { adminRoutes } from './routes/admin.js';
@@ -101,13 +102,36 @@ export async function createServer(): Promise<FastifyInstance> {
   }
 
   // Health Check
-  fastify.get('/health', async () => {
-    return {
-      status: 'ok',
-      mode: env.MODE,
-      master_bot: !!env.MASTER_BOT_TOKEN,
-      timestamp: new Date().toISOString(),
-    };
+  fastify.get('/health', async (_req, reply) => {
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Database healthcheck timeout')), 3000);
+        }),
+      ]);
+
+      return reply.status(200).send({
+        status: 'ok',
+        db: 'ok',
+        mode: env.MODE,
+        master_bot: !!env.MASTER_BOT_TOKEN,
+        allowDemoLogin: process.env.ALLOW_DEMO_LOGIN === 'true',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      fastify.log?.error?.({ err }, 'Database healthcheck failed');
+      return reply.status(503).send({
+        status: 'error',
+        db: 'down',
+        mode: env.MODE,
+        master_bot: !!env.MASTER_BOT_TOKEN,
+        timestamp: new Date().toISOString(),
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   });
 
   // Robots.txt

@@ -14,6 +14,8 @@ enum Plan {
 }
 
 enum SubscriptionStatus {
+  PENDING_PAYMENT
+  PENDING_REVIEW
   ACTIVE
   PAST_DUE
   CANCELED
@@ -22,9 +24,11 @@ enum SubscriptionStatus {
 
 enum OrderStatus {
   PENDING
+  PAYMENT_REVIEW
   PAID
-  CANCELLED
   DELIVERED
+  CANCELLED
+  REFUNDED
 }
 
 enum AdminRole {
@@ -34,22 +38,24 @@ enum AdminRole {
 }
 
 model Tenant {
-  id                String         @id @default(uuid())
-  name              String
-  owner_telegram_id String
-  plan              Plan           @default(BASIC_20)
-  is_active         Boolean        @default(true)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                  String             @id @default(uuid())
+  name                String
+  owner_telegram_id   String
+  plan                Plan               @default(BASIC_20)
+  subscription_status SubscriptionStatus @default(PENDING_PAYMENT)
+  is_active           Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  botConfig         BotConfig?
-  subscriptions     Subscription[]
-  products          Product[]
-  orders            Order[]
-  adminUsers        AdminUser[]
+  botConfig           BotConfig?
+  subscriptions       Subscription[]
+  products            Product[]
+  orders              Order[]
+  adminUsers          AdminUser[]
 
   @@index([owner_telegram_id])
   @@index([plan])
+  @@index([subscription_status])
 }
 
 model BotConfig {
@@ -57,7 +63,8 @@ model BotConfig {
   bot_token_encrypted  String
   bot_username         String?
   webhook_secret       String
-  currency             String   @default("USD")
+  is_active            Boolean  @default(false)
+  currency             String   @default("UZS")
   theme_config         Json     @default("{}")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -70,9 +77,15 @@ model BotConfig {
 model Subscription {
   id                     String             @id @default(uuid())
   tenant_id              String
+  plan                   Plan               @default(BASIC_20)
+  invoice_number         String?            @unique
+  amount_uzs             Int?
+  payment_reference      String?
+  reviewed_by            String?
+  reviewed_at            DateTime?
   stripe_customer_id     String?
   stripe_subscription_id String?            @unique
-  status                 SubscriptionStatus @default(ACTIVE)
+  status                 SubscriptionStatus @default(PENDING_PAYMENT)
   current_period_end     DateTime?
   cancel_at_period_end   Boolean            @default(false)
   createdAt              DateTime           @default(now())
@@ -92,6 +105,7 @@ model Product {
   price       Decimal  @db.Decimal(10, 2)
   stock       Int      @default(0)
   images      String[] @default([])
+  variants    Json     @default("[]")
   category    String   @default("General")
   is_active   Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -111,9 +125,16 @@ model Order {
   customer_telegram_id String
   customer_name        String?
   total_amount         Decimal     @db.Decimal(10, 2)
+  delivery_fee         Decimal     @default(0) @db.Decimal(10, 2)
+  delivery_method      String      @default("COURIER")
   status               OrderStatus @default(PENDING)
-  payment_method       String      @default("TELEGRAM_PAY")
+  payment_method       String      @default("PAYNET_XOLIS")
   payment_id           String?
+  access_token         String?
+  receipt_url          String?
+  verified_at          DateTime?
+  verified_by          String?
+  status_history       Json        @default("[]")
   items                Json        @default("[]")
   shipping_address     String?
   customer_phone       String?

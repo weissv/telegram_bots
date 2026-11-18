@@ -16,11 +16,19 @@ import {
   Copy,
   CheckCircle2,
   AlertCircle,
+  Clock,
+  ShieldCheck,
+  Settings,
 } from 'lucide-react';
-
-const BOT_URL = 'https://t.me/miraiedu_bot';
-const DEMO_MINIAPP_URL = '/miniapp/?tenant_id=00000000-0000-0000-0000-000000000001';
-const ADMIN_URL = '/admin/';
+import {
+  BOT_URL,
+  ADMIN_URL,
+  DEMO_URL,
+  STEPS,
+  FEATURES,
+  FAQ,
+  LEGAL_SECTIONS,
+} from './content.js';
 
 const API_BASE =
   import.meta.env.VITE_API_URL ??
@@ -28,22 +36,20 @@ const API_BASE =
     ? 'http://localhost:3000'
     : '');
 
+// STRICTLY for Platform SaaS Subscription checkout ONLY
 const PLATFORM_PAYNET_QR_URL =
-  'https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO\'PAYNET\'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65';
+  "https://app.paynet.uz/qr-online/00020101021140440012qr-online.uz01186r2s8nPSzGNGRQjdxV0202115204531153038605802UZ5910AO'PAYNET'6008Tashkent610610002164280002uz0106PAYNET0208Toshkent80520012qr-online.uz03097120207070419marketing@paynet.uz63043D65";
 
-const PAYNET_QR_IMAGE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
-  PLATFORM_PAYNET_QR_URL
-)}`;
-
-type PlanTierId = 'BASIC_20' | 'PRO_30' | 'STANDALONE_LIFETIME';
+type SelfServePlanId = 'BASIC_20' | 'PRO_30';
 
 const TARIFF_DETAILS: Record<
-  PlanTierId,
+  SelfServePlanId,
   {
     name: string;
     usdPrice: string;
     period: string;
     uzsPrice: string;
+    amountUzs: number;
   }
 > = {
   BASIC_20: {
@@ -51,20 +57,26 @@ const TARIFF_DETAILS: Record<
     usdPrice: '$20',
     period: '/ мес',
     uzsPrice: '255 000 сум',
+    amountUzs: 255000,
   },
   PRO_30: {
     name: 'Pro Mini App',
     usdPrice: '$30',
     period: '/ мес',
     uzsPrice: '385 000 сум',
-  },
-  STANDALONE_LIFETIME: {
-    name: 'Standalone VPS Lifetime',
-    usdPrice: '$350',
-    period: 'разово',
-    uzsPrice: '4 500 000 сум',
+    amountUzs: 385000,
   },
 };
+
+interface CheckoutStep2Data {
+  token: string;
+  invoiceNumber: string;
+  subscriptionId: string;
+  amountUzs: number;
+  paynetQrUrl: string;
+  botDeepLink: string;
+  plan: SelfServePlanId;
+}
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -94,13 +106,24 @@ async function copyToClipboard(text: string): Promise<boolean> {
 export function App() {
   const [activeTab, setActiveTab] = useState<'miniapp' | 'bot' | 'admin'>('miniapp');
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [selectedPlan, setSelectedPlan] = useState<PlanTierId | null>(null);
-  const [qrLoadError, setQrLoadError] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [openLegalId, setOpenLegalId] = useState<string | null>('operator');
+
+  // Unified 2-Step Checkout Modal State
+  const [selectedPlan, setSelectedPlan] = useState<SelfServePlanId | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState<1 | 2>(1);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [storeName, setStoreName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [isSubmittingStep1, setIsSubmittingStep1] = useState(false);
+  const [step1Error, setStep1Error] = useState<string | null>(null);
+
+  const [checkoutData, setCheckoutData] = useState<CheckoutStep2Data | null>(null);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [qrLoadError, setQrLoadError] = useState(false);
+  const [copiedField, setCopiedField] = useState<'link' | 'invoice' | null>(null);
   const [isNotifying, setIsNotifying] = useState(false);
-  const [notifySuccess, setNotifySuccess] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [notifyError, setNotifyError] = useState<string | null>(null);
   const copyTimerRef = useRef<number | null>(null);
 
@@ -115,40 +138,110 @@ export function App() {
   useEffect(() => {
     if (!selectedPlan) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !isSubmittingStep1 && !isNotifying) {
         setSelectedPlan(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedPlan]);
+  }, [selectedPlan, isSubmittingStep1, isNotifying]);
 
-  const openPaymentModal = (plan: PlanTierId) => {
+  const openPaymentModal = (plan: SelfServePlanId) => {
     setSelectedPlan(plan);
-    setQrLoadError(false);
-    setCopiedLink(false);
-    setNotifySuccess(null);
+    setCheckoutStep(1);
+    setCheckoutData(null);
+    setStep1Error(null);
     setNotifyError(null);
+    setReviewSubmitted(false);
+    setPaymentReference('');
+    setQrLoadError(false);
+    setCopiedField(null);
   };
 
-  const handleCopyPaynetLink = async () => {
-    const ok = await copyToClipboard(PLATFORM_PAYNET_QR_URL);
+  const handleCopy = async (field: 'link' | 'invoice', text: string) => {
+    const ok = await copyToClipboard(text);
     if (!ok) return;
-    setCopiedLink(true);
+    setCopiedField(field);
     if (copyTimerRef.current !== null) {
       window.clearTimeout(copyTimerRef.current);
     }
     copyTimerRef.current = window.setTimeout(() => {
-      setCopiedLink(false);
+      setCopiedField((curr) => (curr === field ? null : curr));
     }, 2000);
+  };
+
+  const handleStep1CreateAccountAndInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlan) return;
+
+    setStep1Error(null);
+    if (!email.trim() || !password || !storeName.trim()) {
+      setStep1Error('Укажите email, пароль и название магазина.');
+      return;
+    }
+    if (password.length < 6) {
+      setStep1Error('Пароль должен содержать минимум 6 символов.');
+      return;
+    }
+
+    setIsSubmittingStep1(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/billing/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          email: email.trim(),
+          password,
+          storeName: storeName.trim(),
+          ...(phone.trim() ? { phone: phone.trim() } : {}),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Ошибка создания счёта (${res.status})`);
+      }
+
+      const data = await res.json();
+      if (data.token) {
+        try {
+          localStorage.setItem('tg_merchant_token', data.token);
+        } catch {
+          // ignore storage restrictions
+        }
+      }
+
+      const invoiceNumber =
+        data.subscription?.invoice_number || data.invoiceNumber || `INV-${Date.now()}`;
+      const subscriptionId = data.subscription?.id || data.subscriptionId || '';
+      const amountUzs =
+        data.subscription?.amount_uzs ||
+        data.priceUzs ||
+        TARIFF_DETAILS[selectedPlan].amountUzs;
+
+      setCheckoutData({
+        token: data.token || '',
+        invoiceNumber,
+        subscriptionId,
+        amountUzs,
+        paynetQrUrl: data.paynetQrUrl || PLATFORM_PAYNET_QR_URL,
+        botDeepLink: data.botDeepLink || BOT_URL,
+        plan: selectedPlan,
+      });
+      setCheckoutStep(2);
+    } catch (err: any) {
+      setStep1Error(err?.message || 'Не удалось создать аккаунт и выставить счёт.');
+    } finally {
+      setIsSubmittingStep1(false);
+    }
   };
 
   const handleConfirmPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPlan) return;
+    if (!checkoutData) return;
 
     setIsNotifying(true);
-    setNotifySuccess(null);
     setNotifyError(null);
 
     try {
@@ -156,11 +249,13 @@ export function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(checkoutData.token ? { Authorization: `Bearer ${checkoutData.token}` } : {}),
         },
         body: JSON.stringify({
-          plan: selectedPlan,
-          customerEmail: customerEmail.trim() || undefined,
-          storeName: storeName.trim() || undefined,
+          plan: checkoutData.plan,
+          invoiceNumber: checkoutData.invoiceNumber,
+          subscriptionId: checkoutData.subscriptionId || undefined,
+          paymentReference: paymentReference.trim() || undefined,
         }),
       });
 
@@ -169,11 +264,9 @@ export function App() {
         throw new Error(errData.error || `Ошибка отправки (${res.status})`);
       }
 
-      setNotifySuccess(
-        'Уведомление об оплате отправлено администратору! Активируйте магазин в @miraiedu_bot.'
-      );
+      setReviewSubmitted(true);
     } catch (err: any) {
-      setNotifyError(err?.message || 'Не удалось отправить уведомление об оплате.');
+      setNotifyError(err?.message || 'Не удалось отправить заявку об оплате на проверку.');
     } finally {
       setIsNotifying(false);
     }
@@ -215,6 +308,9 @@ export function App() {
             <a href="#faq" className="hover:text-white transition-colors">
               FAQ
             </a>
+            <a href="#legal" className="hover:text-white transition-colors">
+              Правовая информация
+            </a>
           </nav>
 
           <div className="flex items-center gap-2.5">
@@ -226,15 +322,14 @@ export function App() {
             >
               Вход в админку
             </a>
-            <a
-              href={BOT_URL}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => openPaymentModal('PRO_30')}
               className="text-xs font-semibold px-4 py-2 rounded-lg bg-brand hover:bg-brand-dark text-white shadow-lg shadow-brand/20 transition-all active:scale-95 flex items-center gap-1.5"
             >
-              <span>Запустить бота</span>
+              <span>Создать магазин</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </a>
+            </button>
           </div>
         </div>
       </header>
@@ -244,55 +339,54 @@ export function App() {
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-xs font-medium text-brand-light">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Платформа Telegram-торговли нового поколения • Ташкент & СНГ</span>
+            <span>Платформа Telegram-торговли • Ташкент и Узбекистан</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white leading-[1.12]">
-            Продавайте в Telegram с конверсией{' '}
+            Продавайте в Telegram через{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-300 to-indigo-300">
-              в 3 раза выше сайтов
+              Mini App и умного бота
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Полноэкранный Telegram Mini App, умный бот для заказов прямо в чате и удобная веб-панель для мерчанта. Встроенный приём платежей через Paynet QR-Online (Uzcard, Humo, 0% комиссия для самозанятых и бизнеса) в один клик.
+            Полноэкранный Telegram Mini App, бот для заказов в чате и веб-панель управления. Приём оплаты через Paynet QR-Online (Uzcard, Humo — 0% по условиям Paynet для самозанятых и ИП; для ООО условия по договору с Paynet).
           </p>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <a
-              href={BOT_URL}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => openPaymentModal('PRO_30')}
               className="w-full sm:w-auto h-12 px-7 rounded-xl bg-brand hover:bg-brand-dark font-semibold text-sm text-white shadow-xl shadow-brand/25 flex items-center justify-center gap-2 transition-all active:scale-95"
             >
               <Bot className="w-4 h-4" />
-              <span>Открыть демо в Telegram</span>
-            </a>
+              <span>Запустить свой магазин</span>
+            </button>
 
             <a
-              href={DEMO_MINIAPP_URL}
+              href={DEMO_URL}
               target="_blank"
               rel="noreferrer"
               className="w-full sm:w-auto h-12 px-6 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 font-semibold text-sm text-slate-200 flex items-center justify-center gap-2 transition-all"
             >
               <Smartphone className="w-4 h-4 text-sky-400" />
-              <span>Полноэкранная витрина (Web)</span>
+              <span>Посмотреть демо-витрину</span>
             </a>
           </div>
 
-          {/* Social Proof Badges */}
+          {/* Honest Badges */}
           <div className="pt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400 font-medium">
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-emerald-400" />
-              <span>0% комиссий платформы</span>
+              <span>0% комиссия платформы с ваших продаж</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-emerald-400" />
-              <span>Запуск за 2 минуты без кода</span>
+              <span>Пошаговый запуск за ~10 минут</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Check className="w-4 h-4 text-emerald-400" />
-              <span>Мгновенные уведомления о заказах</span>
+              <span>Мгновенные уведомления и очередь проверки оплат</span>
             </div>
           </div>
         </div>
@@ -306,11 +400,11 @@ export function App() {
               Интерактивный предпросмотр платформы
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Попробуйте все 3 грани экосистемы: витрину покупателя, чат-бота и веб-панель управления.
+              Посмотрите 3 части экосистемы: витрину покупателя, чат-бота и веб-панель управления.
             </p>
 
             {/* Tab switchers */}
-            <div className="inline-flex p-1 rounded-xl bg-dark-850 border border-white/10 mt-3">
+            <div className="inline-flex p-1 rounded-xl bg-dark-850 border border-white/10 mt-3 flex-wrap justify-center">
               <button
                 type="button"
                 onClick={() => setActiveTab('miniapp')}
@@ -356,27 +450,24 @@ export function App() {
           <div className="relative rounded-2xl border border-white/10 bg-dark-950 p-4 sm:p-8 overflow-hidden shadow-2xl">
             {activeTab === 'miniapp' && (
               <div className="max-w-md mx-auto rounded-3xl border-2 border-slate-700 bg-white text-zinc-900 overflow-hidden shadow-2xl">
-                {/* Simulated Phone Bar */}
                 <div className="bg-zinc-100 px-5 py-2.5 flex items-center justify-between text-xs text-zinc-500 border-b border-zinc-200">
                   <span className="font-semibold text-zinc-800">9:41</span>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-bold text-blue-600">MODA Tashkent</span>
+                    <span className="text-[11px] font-bold text-blue-600">MODA Tashkent (Демо)</span>
                   </div>
                   <span>100%</span>
                 </div>
 
-                {/* Simulated Mini App Header */}
                 <div className="p-4 border-b border-zinc-100 bg-white flex items-center justify-between">
                   <div>
                     <h4 className="font-bold text-sm text-zinc-900">MODA Tashkent</h4>
-                    <p className="text-[11px] text-zinc-500">Официальный магазин одежды и обуви</p>
+                    <p className="text-[11px] text-zinc-500">Демонстрационная витрина одежды и обуви</p>
                   </div>
                   <span className="px-2 py-1 rounded bg-zinc-100 text-xs font-medium text-zinc-700">
                     RU
                   </span>
                 </div>
 
-                {/* Chips */}
                 <div className="px-4 py-2.5 flex gap-1.5 overflow-x-auto bg-zinc-50 border-b border-zinc-100">
                   <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-semibold">
                     Все товары
@@ -392,7 +483,6 @@ export function App() {
                   </span>
                 </div>
 
-                {/* Products Grid Mock */}
                 <div className="p-4 grid grid-cols-2 gap-3 bg-zinc-50">
                   <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden p-2.5 space-y-2">
                     <div className="aspect-square bg-zinc-100 rounded-lg overflow-hidden">
@@ -404,10 +494,11 @@ export function App() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-zinc-900 truncate">Худи Tashkent Edition</p>
+                      <p className="text-[10px] text-zinc-500">Размеры: S · M · L</p>
                       <p className="text-xs font-bold text-zinc-900 mt-1">420 000 сум</p>
                     </div>
                     <button type="button" className="w-full py-1.5 rounded-lg bg-blue-50 text-blue-600 font-semibold text-xs">
-                      + В корзину
+                      Выбрать размер
                     </button>
                   </div>
 
@@ -421,15 +512,15 @@ export function App() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-zinc-900 truncate">Кроссовки Classic Street</p>
+                      <p className="text-[10px] text-zinc-500">Размеры: 39 · 40 · 41</p>
                       <p className="text-xs font-bold text-zinc-900 mt-1">650 000 сум</p>
                     </div>
                     <button type="button" className="w-full py-1.5 rounded-lg bg-blue-50 text-blue-600 font-semibold text-xs">
-                      + В корзину
+                      Выбрать размер
                     </button>
                   </div>
                 </div>
 
-                {/* Pinned Native Telegram MainButton */}
                 <div className="p-3 bg-white border-t border-zinc-200">
                   <button type="button" className="w-full py-3 rounded-xl bg-blue-600 font-bold text-white text-xs flex items-center justify-between px-4">
                     <span>Корзина (2)</span>
@@ -453,7 +544,7 @@ export function App() {
 
                 <div className="p-3 rounded-xl bg-dark-850 border border-white/10 space-y-2">
                   <p className="font-bold text-white text-sm">🛍️ Оверсайз худи Tashkent Edition</p>
-                  <p className="text-slate-400 text-xs">100% узбекский хлопок пенье, плотность 420г/м². Мягкий начес, идеальная посадка.</p>
+                  <p className="text-slate-400 text-xs">100% узбекский хлопок пенье, плотность 420г/м². Размеры: S, M, L.</p>
                   <div className="flex items-center justify-between text-xs pt-1">
                     <span className="text-emerald-400 font-semibold">🟢 В наличии (35 шт.)</span>
                     <span className="text-white font-bold text-sm">420 000 сум</span>
@@ -468,7 +559,7 @@ export function App() {
                       <span className="py-1.5 rounded bg-white/5 border border-white/5">Вперед ➡️</span>
                     </div>
                     <button type="button" className="w-full py-2 rounded-lg bg-white/10 text-white font-semibold text-xs">
-                      🛒 Корзина в чате (1)
+                      🛒 Оформить с телефоном и доставкой
                     </button>
                   </div>
                 </div>
@@ -498,12 +589,12 @@ export function App() {
                     <div className="text-xl font-bold text-zinc-900 mt-1">42</div>
                   </div>
                   <div className="p-3.5 rounded-lg border border-zinc-200 bg-zinc-50">
-                    <div className="text-xs text-zinc-500">Ожидают доставки</div>
-                    <div className="text-xl font-bold text-amber-600 mt-1">3</div>
+                    <div className="text-xs text-zinc-500">На проверке оплаты</div>
+                    <div className="text-xl font-bold text-sky-600 mt-1">3</div>
                   </div>
                   <div className="p-3.5 rounded-lg border border-zinc-200 bg-zinc-50">
-                    <div className="text-xs text-zinc-500">Товаров в наличии</div>
-                    <div className="text-xl font-bold text-zinc-900 mt-1">8 шт.</div>
+                    <div className="text-xs text-zinc-500">Готовность витрины</div>
+                    <div className="text-xl font-bold text-emerald-600 mt-1">4 / 4</div>
                   </div>
                 </div>
               </div>
@@ -517,10 +608,10 @@ export function App() {
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-3">
             <h2 className="text-2xl sm:text-4xl font-bold text-white tracking-tight">
-              Почему Telegram-магазины продают больше
+              Как устроен магазин внутри Telegram
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Покупателю не нужно переходить в браузер, вспоминать пароли или регистрироваться.
+              Покупатель оформляет заказ в привычном мессенджере, а вы контролируете каталог, остатки и поступление оплат.
             </p>
           </div>
 
@@ -529,9 +620,9 @@ export function App() {
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-brand-light flex items-center justify-center">
                 <Zap className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-white">0% трения при покупке</h3>
+              <h3 className="text-lg font-semibold text-white">Быстрое оформление без регистрации</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Telegram автоматически передает имя, телефон и Telegram ID клиента. Заказ оформляется в 2 касания без логинов и смс-кодов.
+                Telegram передаёт имя и профиль пользователя (initData), а контактный телефон, способ получения (курьер или самовывоз) и адрес покупатель указывает и подтверждает прямо в форме заказа.
               </p>
             </div>
 
@@ -539,9 +630,9 @@ export function App() {
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
                 <CreditCard className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Paynet QR-Online (0% комиссия)</h3>
+              <h3 className="text-lg font-semibold text-white">Paynet QR-Online и честная проверка</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Приём оплаты по Uzcard и Humo через Paynet QR-Online — с 0% комиссией для самозанятых и бизнеса в Узбекистане. Покупатели платят по QR или прямой ссылке в один тап.
+                Ставка 0% в Paynet Xolis применяется по условиям Paynet (преимущественно для самозанятых и ИП; для ООО комиссия определяется договором с Paynet). Для цифровых товаров внутри Telegram учитываются правила Telegram Stars.
               </p>
             </div>
 
@@ -549,11 +640,36 @@ export function App() {
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
                 <Bell className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Мгновенные оповещения</h3>
+              <h3 className="text-lg font-semibold text-white">Контроль оплат и остатков</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                О каждом новом заказе мерчант получает подробное уведомление в Telegram с составом, адресом и номером телефона покупателя.
+                После нажатия покупателем «Я оплатил» заказ переходит в статус «На проверке оплаты». Вы проверяете поступление по ID транзакции Paynet и подтверждаете перевод в 1 клик.
               </p>
             </div>
+          </div>
+
+          {/* Step-by-step launch (~10 min) */}
+          <div className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {STEPS.map((step) => (
+              <div
+                key={step.title}
+                className="p-5 rounded-xl bg-dark-900/70 border border-white/[0.07] space-y-2"
+              >
+                <h4 className="text-sm font-semibold text-white">{step.title}</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">{step.text}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {FEATURES.map((feat) => (
+              <div
+                key={feat.term}
+                className="p-4 rounded-xl bg-dark-950/60 border border-white/[0.06] space-y-1.5"
+              >
+                <div className="text-xs font-semibold text-white">{feat.term}</div>
+                <div className="text-xs text-slate-400 leading-relaxed">{feat.text}</div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -570,7 +686,7 @@ export function App() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-dark-950 overflow-hidden">
+          <div className="rounded-xl border border-white/10 bg-dark-950 overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-white/10 text-slate-400">
@@ -583,27 +699,22 @@ export function App() {
                 <tr>
                   <td className="p-4 font-medium text-white">Интерфейс витрины</td>
                   <td className="p-4">Сообщения с кнопками в чате</td>
-                  <td className="p-4 text-brand-light font-medium">Полноэкранный WebApp с анимацией</td>
+                  <td className="p-4 text-brand-light font-medium">Полноэкранный WebApp внутри Telegram</td>
                 </tr>
                 <tr>
-                  <td className="p-4 font-medium text-white">Фильтрация и категории</td>
-                  <td className="p-4">Текстовые команды</td>
-                  <td className="p-4 text-brand-light font-medium">Интерактивные чипсы и поиск</td>
+                  <td className="p-4 font-medium text-white">Поиск, категории и варианты</td>
+                  <td className="p-4">Категории и inline-кнопки</td>
+                  <td className="p-4 text-brand-light font-medium">Живой поиск, чипсы категорий и выбор размеров</td>
                 </tr>
                 <tr>
-                  <td className="p-4 font-medium text-white">Адаптация темы</td>
-                  <td className="p-4">Стандартная тема чата</td>
-                  <td className="p-4 text-brand-light font-medium">Telegram Dark/Light Mode</td>
+                  <td className="p-4 font-medium text-white">Юридические реквизиты и доставка</td>
+                  <td className="p-4 text-emerald-400">Включено перед оплатой</td>
+                  <td className="p-4 text-emerald-400">Расчёт доставки + реквизиты до оплаты</td>
                 </tr>
                 <tr>
-                  <td className="p-4 font-medium text-white">Тактильный отклик (Haptic)</td>
-                  <td className="p-4 text-slate-500">—</td>
-                  <td className="p-4 text-emerald-400 font-semibold">Да (виброотклик на нажатия)</td>
-                </tr>
-                <tr>
-                  <td className="p-4 font-medium text-white">Веб-панель управления</td>
+                  <td className="p-4 font-medium text-white">Веб-панель и загрузка фото/CSV</td>
                   <td className="p-4 text-emerald-400">Включена</td>
-                  <td className="p-4 text-emerald-400">Включена</td>
+                  <td className="p-4 text-emerald-400">Включена + экспорт CSV</td>
                 </tr>
               </tbody>
             </table>
@@ -619,7 +730,7 @@ export function App() {
               Прозрачные тарифы без скрытых платежей
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Никаких процентов от ваших продаж. Фиксированная ежемесячная абонентская плата.
+              Никаких процентов платформы с ваших продаж. Абонентская плата оплачивается по счёту через Paynet QR-Online.
             </p>
           </div>
 
@@ -630,7 +741,7 @@ export function App() {
                 <span className="text-xs font-semibold px-2.5 py-1 rounded bg-white/5 text-slate-300">
                   Для быстрого старта
                 </span>
-                <h3 className="text-xl font-bold text-white">Базовый чат-бот</h3>
+                <h3 className="text-xl font-bold text-white">Basic</h3>
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-extrabold text-white">$20</span>
@@ -641,21 +752,21 @@ export function App() {
                   </div>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Каталог товаров и прием заказов в сообщениях Telegram.
+                  Каталог товаров, корзина и оформление заказов в сообщениях Telegram.
                 </p>
 
                 <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-white/10">
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Интерактивный каталог в чате</span>
+                    <span>Интерактивный каталог и корзина в чате</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Управление корзиной прямо в диалоге</span>
+                    <span>Сбор телефона, способа доставки и адреса</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Оплата заказов через Paynet QR-Online (0%)</span>
+                    <span>Оплата через ваш Paynet QR-Online</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -669,7 +780,7 @@ export function App() {
                 onClick={() => openPaymentModal('BASIC_20')}
                 className="w-full py-3 rounded-xl border border-white/15 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
               >
-                Оплатить и подключить
+                Оформить и выставить счёт
               </button>
             </div>
 
@@ -681,7 +792,7 @@ export function App() {
 
               <div className="space-y-4">
                 <span className="text-xs font-semibold px-2.5 py-1 rounded bg-brand/10 text-brand-light">
-                  Максимум продаж
+                  Максимум конверсии
                 </span>
                 <h3 className="text-xl font-bold text-white">Pro Mini App</h3>
                 <div>
@@ -694,7 +805,7 @@ export function App() {
                   </div>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Полноэкранная витрина Telegram Mini App с персональным дизайном.
+                  Полноэкранная витрина Telegram Mini App с поиском, размерами и ботом.
                 </p>
 
                 <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-white/10">
@@ -704,19 +815,19 @@ export function App() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
-                    <span>Фильтрация, поиск и галереи товаров</span>
+                    <span>Поиск по каталогу, категории и размеры/варианты</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
-                    <span>Нативная кнопка MainButton и BackButton</span>
+                    <span>Кнопки Telegram MainButton и BackButton</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
-                    <span>Оплата в 1 клик через Paynet QR-Online (Uzcard, Humo, 0%)</span>
+                    <span>Персональный Paynet QR-Online + проверка оплат</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-brand-light shrink-0" />
-                    <span>Аналитика продаж и графики выручки</span>
+                    <span>Аналитика выручки и экспорт заказов CSV</span>
                   </li>
                 </ul>
               </div>
@@ -726,38 +837,38 @@ export function App() {
                 onClick={() => openPaymentModal('PRO_30')}
                 className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark text-center text-xs font-bold text-white shadow-lg shadow-brand/20 transition-all active:scale-95"
               >
-                Оплатить и подключить
+                Оформить и выставить счёт
               </button>
             </div>
 
-            {/* Standalone Lifetime Plan */}
+            {/* Standalone VPS Turnkey (Contact Support — No self-serve checkout) */}
             <div className="rounded-2xl border border-white/10 bg-dark-900 p-6 space-y-6 flex flex-col justify-between">
               <div className="space-y-4">
                 <span className="text-xs font-semibold px-2.5 py-1 rounded bg-white/5 text-slate-300">
-                  Для крупных брендов
+                  Индивидуальное внедрение
                 </span>
                 <h3 className="text-xl font-bold text-white">Standalone VPS</h3>
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-extrabold text-white">$350</span>
-                    <span className="text-xs text-slate-400">разово навсегда</span>
+                    <span className="text-xs text-slate-400">под ключ</span>
                   </div>
-                  <div className="text-xs font-medium text-emerald-400 mt-1 tabular">
-                    4 500 000 сум разово по Paynet QR-Online
+                  <div className="text-xs font-medium text-slate-400 mt-1 tabular">
+                    4 500 000 сум · по договору и согласованию
                   </div>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Автономный сервер, полный доступ к коду и базе данных.
+                  Автономный сервер (Docker, PostgreSQL, Redis, HTTPS) и установка под ваш бренд.
                 </p>
 
                 <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-white/10">
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Развертывание на вашем отдельном VPS</span>
+                    <span>Развёртывание на вашем отдельном VPS</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>0% комиссий и без абонентской платы</span>
+                    <span>Без ежемесячной SaaS-подписки</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -765,18 +876,20 @@ export function App() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Встроенный Paynet QR-Online и кастомные интеграции</span>
+                    <span>Помощь инженера при первом запуске</span>
                   </li>
                 </ul>
               </div>
 
-              <button
-                type="button"
-                onClick={() => openPaymentModal('STANDALONE_LIFETIME')}
-                className="w-full py-3 rounded-xl border border-white/15 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors"
+              <a
+                href={BOT_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3 rounded-xl border border-white/15 hover:bg-white/5 text-center text-xs font-semibold text-white transition-colors inline-flex items-center justify-center gap-1.5"
               >
-                Оплатить и подключить
-              </button>
+                <span>Запросить внедрение (Telegram)</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              </a>
             </div>
           </div>
         </div>
@@ -786,28 +899,11 @@ export function App() {
       <section id="faq" className="relative z-10 py-16 px-4 max-w-3xl mx-auto space-y-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl sm:text-3xl font-bold text-white">Частые вопросы</h2>
-          <p className="text-xs text-slate-400">Всё, что нужно знать перед стартом продаж</p>
+          <p className="text-xs text-slate-400">Честные ответы перед стартом продаж</p>
         </div>
 
         <div className="space-y-3">
-          {[
-            {
-              q: 'Нужен ли мне программист для запуска магазина?',
-              a: 'Нет. Вы просто открываете бота @miraiedu_bot, указываете имя магазина, вставляете токен бота от @BotFather — и магазин готов к работе за 2 минуты.',
-            },
-            {
-              q: 'Как я узнаю о новом заказе?',
-              a: 'Мгновенно. Как только клиент нажимает «Оплатить», вам в Telegram приходит подробное сообщение с номером заказа, именем, телефоном, адресом доставки и составом корзины.',
-            },
-            {
-              q: 'Какие платежные системы поддерживаются в Узбекистане?',
-              a: 'Платформа оснащена встроенной оплатой через Paynet QR-Online (Uzcard, Humo и приложение Paynet) с комиссией 0% для самозанятых и бизнеса в Узбекистане. Укажите вашу ссылку Paynet QR-Online в админке — покупатели смогут оплачивать по QR или прямой ссылке в один клик прямо в боте и Mini App.',
-            },
-            {
-              q: 'Могу ли я загружать товары и менять цены с телефона?',
-              a: 'Да. Веб-панель мерчанта полностью адаптирована для смартфонов и планшетов. Вы можете менять фото, цены, складские остатки и статусы заказов прямо на ходу.',
-            },
-          ].map((item, idx) => (
+          {FAQ.map((item, idx) => (
             <div
               key={idx}
               className="rounded-xl border border-white/10 bg-dark-900 overflow-hidden"
@@ -819,7 +915,7 @@ export function App() {
               >
                 <span>{item.q}</span>
                 <ChevronDown
-                  className={`w-4 h-4 text-slate-400 transition-transform ${
+                  className={`w-4 h-4 text-slate-400 shrink-0 ml-3 transition-transform ${
                     openFaq === idx ? 'rotate-180 text-brand-light' : ''
                   }`}
                 />
@@ -834,6 +930,64 @@ export function App() {
         </div>
       </section>
 
+      {/* Compliance / Legal / Requisites / Terms & Privacy Section */}
+      <section id="legal" className="relative z-10 py-14 px-4 max-w-4xl mx-auto space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                Правовая информация, реквизиты и поддержка
+              </h2>
+              <p className="text-xs text-slate-400">
+                Публичная оферта SaaS, политика конфиденциальности и условия возврата
+              </p>
+            </div>
+          </div>
+          <a
+            href={BOT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold text-brand-light hover:underline inline-flex items-center gap-1"
+          >
+            <span>Поддержка: @miraiedu_bot</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+
+        <div className="space-y-2.5">
+          {LEGAL_SECTIONS.map((sec) => {
+            const isOpen = openLegalId === sec.id;
+            return (
+              <div
+                key={sec.id}
+                className="rounded-xl border border-white/10 bg-dark-900 overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenLegalId(isOpen ? null : sec.id)}
+                  className="w-full px-4 py-3.5 text-left flex items-center justify-between text-xs sm:text-sm font-semibold text-white hover:text-brand-light transition-colors"
+                >
+                  <span>{sec.title}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 shrink-0 ml-3 transition-transform ${
+                      isOpen ? 'rotate-180 text-brand-light' : ''
+                    }`}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="px-4 pb-4 pt-2 border-t border-white/[0.06] space-y-2 text-xs text-slate-400 leading-relaxed">
+                    {sec.body.map((p, i) => (
+                      <p key={i}>{p}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="relative z-10 py-10 px-4 border-t border-white/[0.08] text-xs text-slate-500">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -842,27 +996,30 @@ export function App() {
             <span>Mirai Commerce Platform</span>
           </div>
 
-          <div className="flex items-center gap-6">
-            <a href={BOT_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
-              Бот в Telegram
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            <a href="#legal" className="hover:text-white transition-colors">
+              Оферта и конфиденциальность
             </a>
-            <a href={DEMO_MINIAPP_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
-              Витрина Mini App
+            <a href={BOT_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
+              Поддержка (@miraiedu_bot)
+            </a>
+            <a href={DEMO_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
+              Демо-витрина
             </a>
             <a href={ADMIN_URL} target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
               Панель мерчанта
             </a>
           </div>
 
-          <div>© 2026 Mirai Commerce. Все права защищены.</div>
+          <div>© 2026 Mirai Commerce.</div>
         </div>
       </footer>
 
-      {/* Paynet Tariff Payment Modal */}
+      {/* Unified 2-Step Account & Paynet Billing Modal */}
       {selectedPlan && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
-          onClick={() => !isNotifying && setSelectedPlan(null)}
+          onClick={() => !isSubmittingStep1 && !isNotifying && setSelectedPlan(null)}
         >
           <div
             className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-white/15 bg-dark-900 p-6 shadow-2xl space-y-5 text-left"
@@ -871,9 +1028,12 @@ export function App() {
             {/* Modal Header */}
             <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold mb-1.5">
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>Paynet QR-Online · 0% комиссия</span>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand/15 text-brand-light text-[11px] font-semibold mb-1.5">
+                  <span>Шаг {checkoutStep} из 2</span>
+                  <span>·</span>
+                  <span>
+                    {checkoutStep === 1 ? 'Аккаунт магазина' : 'Оплата счёта Paynet'}
+                  </span>
                 </div>
                 <h3 className="text-lg font-bold text-white">
                   {TARIFF_DETAILS[selectedPlan].name}
@@ -894,7 +1054,7 @@ export function App() {
               <button
                 type="button"
                 onClick={() => setSelectedPlan(null)}
-                disabled={isNotifying}
+                disabled={isSubmittingStep1 || isNotifying}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                 aria-label="Закрыть"
               >
@@ -902,159 +1062,276 @@ export function App() {
               </button>
             </div>
 
-            {/* Plan Switcher Pills */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-dark-950 border border-white/10">
-              {(['BASIC_20', 'PRO_30', 'STANDALONE_LIFETIME'] as const).map((planKey) => (
-                <button
-                  key={planKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPlan(planKey);
-                    setNotifySuccess(null);
-                    setNotifyError(null);
-                  }}
-                  className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold transition-colors ${
-                    selectedPlan === planKey
-                      ? 'bg-brand text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {planKey === 'BASIC_20'
-                    ? 'Basic $20'
-                    : planKey === 'PRO_30'
-                    ? 'Pro $30'
-                    : 'VPS $350'}
-                </button>
-              ))}
-            </div>
+            {checkoutStep === 1 && (
+              <>
+                {/* Plan Switcher Pills (Self-serve plans ONLY) */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-dark-950 border border-white/10">
+                  {(['BASIC_20', 'PRO_30'] as const).map((planKey) => (
+                    <button
+                      key={planKey}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPlan(planKey);
+                        setStep1Error(null);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
+                        selectedPlan === planKey
+                          ? 'bg-brand text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {planKey === 'BASIC_20' ? 'Basic · $20 / 255 000 сум' : 'Pro Mini App · $30 / 385 000 сум'}
+                    </button>
+                  ))}
+                </div>
 
-            {/* QR Code & Direct Paynet Links */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-dark-950 border border-white/10">
-              <div className="w-40 h-40 rounded-xl bg-white p-2 flex items-center justify-center shrink-0">
-                {qrLoadError ? (
-                  <div className="text-center space-y-1.5 px-2">
-                    <QrCode className="w-8 h-8 text-emerald-600 mx-auto" />
-                    <p className="text-[11px] font-semibold text-zinc-900">
-                      QR-код недоступен
-                    </p>
-                    <p className="text-[10px] text-zinc-500">
-                      Нажмите «Перейти в Paynet»
-                    </p>
+                <form onSubmit={handleStep1CreateAccountAndInvoice} className="space-y-3.5">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Эти данные создадут ваш единый аккаунт для входа в админ-панель и привязки Telegram-бота. Если у вас уже есть аккаунт — введите его email и пароль.
+                  </p>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                      Название магазина *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={storeName}
+                      onChange={(e) => setStoreName(e.target.value)}
+                      placeholder="Например: MODA Tashkent"
+                      className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                    />
                   </div>
-                ) : (
-                  <img
-                    src={PAYNET_QR_IMAGE_URL}
-                    alt="Paynet QR-Online"
-                    onError={() => setQrLoadError(true)}
-                    className="w-full h-full object-contain"
-                  />
-                )}
-              </div>
 
-              <div className="flex-1 space-y-2.5 w-full">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Отсканируйте QR в приложении Paynet (или Uzcard / Humo) и оплатите{' '}
-                  <strong className="text-white">
-                    {TARIFF_DETAILS[selectedPlan].uzsPrice}
-                  </strong>
-                  .
-                </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="owner@shop.uz"
+                        className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                      />
+                    </div>
 
-                <a
-                  href={PLATFORM_PAYNET_QR_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <span>⚡ Перейти в Paynet для оплаты</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                        Пароль * (от 6 символов)
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                      />
+                    </div>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={handleCopyPaynetLink}
-                  className="w-full py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-slate-200 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  {copiedLink ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400 font-semibold">Скопировано!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Скопировать ссылку Paynet</span>
-                    </>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                      Телефон (необязательно)
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+998 90 123-45-67"
+                      className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                    />
+                  </div>
+
+                  {step1Error && (
+                    <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <span>{step1Error}</span>
+                    </div>
                   )}
-                </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingStep1}
+                    className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-brand/20 transition-all"
+                  >
+                    {isSubmittingStep1
+                      ? 'Создание аккаунта и счёта…'
+                      : 'Продолжить к оплате (Выставить счёт)'}
+                  </button>
+                </form>
+              </>
+            )}
+
+            {checkoutStep === 2 && checkoutData && (
+              <div className="space-y-4">
+                {/* Invoice Strip */}
+                <div className="p-3.5 rounded-xl bg-dark-950 border border-white/10 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] text-slate-400">Номер выставленного счёта</div>
+                    <div className="text-sm font-mono font-bold text-white">
+                      {checkoutData.invoiceNumber}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy('invoice', checkoutData.invoiceNumber)}
+                    className="px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-xs text-slate-200 inline-flex items-center gap-1.5"
+                  >
+                    {copiedField === 'invoice' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Скопировано</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Копировать</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* QR Code & Direct Paynet Links */}
+                <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-xl bg-dark-950 border border-white/10">
+                  <div className="w-40 h-40 rounded-xl bg-white p-2 flex items-center justify-center shrink-0">
+                    {qrLoadError ? (
+                      <div className="text-center space-y-1.5 px-2">
+                        <QrCode className="w-8 h-8 text-emerald-600 mx-auto" />
+                        <p className="text-[11px] font-semibold text-zinc-900">
+                          QR-код недоступен
+                        </p>
+                        <p className="text-[10px] text-zinc-500">
+                          Нажмите «Перейти в Paynet»
+                        </p>
+                      </div>
+                    ) : (
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+                          checkoutData.paynetQrUrl
+                        )}`}
+                        alt="Paynet QR-Online"
+                        onError={() => setQrLoadError(true)}
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2.5 w-full">
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Отсканируйте QR в Paynet и оплатите{' '}
+                      <strong className="text-white tabular">
+                        {checkoutData.amountUzs.toLocaleString('ru-RU')} сум
+                      </strong>{' '}
+                      ({TARIFF_DETAILS[checkoutData.plan].usdPrice}).
+                    </p>
+
+                    <a
+                      href={checkoutData.paynetQrUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <span>⚡ Перейти в Paynet для оплаты</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCopy('link', checkoutData.paynetQrUrl)}
+                      className="w-full py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-slate-200 flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      {copiedField === 'link' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400 font-semibold">Ссылка скопирована!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Скопировать ссылку Paynet</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Payment Confirmation Form OR Review Status */}
+                {!reviewSubmitted ? (
+                  <form onSubmit={handleConfirmPayment} className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                        Номер чека / транзакции Paynet (необязательно)
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                        placeholder="Например: чек №123456"
+                        className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
+                      />
+                    </div>
+
+                    {notifyError && (
+                      <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <span>{notifyError}</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isNotifying}
+                      className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-brand/20 transition-all"
+                    >
+                      {isNotifying
+                        ? 'Отправка на проверку…'
+                        : '✅ Я оплатил — отправить на проверку'}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                    <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold text-white">
+                        Заявка на проверке · {checkoutData.invoiceNumber}
+                      </div>
+                      <p className="leading-relaxed opacity-90">
+                        Оплата отправлена на проверку администратору платформы. После подтверждения подписка активируется на 30 дней. Пока идёт проверка, вы уже можете привязать бота и настроить каталог!
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Two Clear Handoff Buttons */}
+                <div className="pt-2 border-t border-white/10 space-y-2">
+                  <a
+                    href={checkoutData.botDeepLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] border border-white/15 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <span>🤖 Подключить бота в @miraiedu_bot</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                  </a>
+
+                  <a
+                    href={`${ADMIN_URL}?tab=settings`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2.5 px-4 rounded-xl border border-white/15 hover:bg-white/5 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <span>⚙️ Открыть панель магазина (/admin/)</span>
+                  </a>
+                </div>
               </div>
-            </div>
-
-            {/* Notification Form & Bot Activation */}
-            <form onSubmit={handleConfirmPayment} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                    Email или Telegram (@username)
-                  </label>
-                  <input
-                    type="text"
-                    value={customerEmail}
-                    onChange={(e) => setCustomerEmail(e.target.value)}
-                    placeholder="owner@shop.uz / @username"
-                    className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                    Название магазина (необязательно)
-                  </label>
-                  <input
-                    type="text"
-                    value={storeName}
-                    onChange={(e) => setStoreName(e.target.value)}
-                    placeholder="MODA Tashkent"
-                    className="w-full h-10 px-3 rounded-xl bg-dark-950 border border-white/10 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-brand"
-                  />
-                </div>
-              </div>
-
-              {notifySuccess && (
-                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>{notifySuccess}</span>
-                </div>
-              )}
-
-              {notifyError && (
-                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                  <span>{notifyError}</span>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-1">
-                <button
-                  type="submit"
-                  disabled={isNotifying}
-                  className="w-full py-3 rounded-xl bg-brand hover:bg-brand-dark disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-brand/20 transition-all"
-                >
-                  {isNotifying
-                    ? 'Отправка уведомления…'
-                    : '✅ Я оплатил — уведомить администратора'}
-                </button>
-
-                <a
-                  href={BOT_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-2.5 rounded-xl border border-white/15 hover:bg-white/5 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
-                >
-                  <span>🤖 Активировать магазин в @miraiedu_bot</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                </a>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}

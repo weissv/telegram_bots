@@ -84,7 +84,10 @@ export async function processSubscriptionExpirations(): Promise<void> {
       // Grace period expired: Deactivate tenant storefront
       await prisma.tenant.update({
         where: { id: sub.tenant_id },
-        data: { is_active: false },
+        data: {
+          is_active: false,
+          subscription_status: 'PAST_DUE',
+        },
       });
 
       await prisma.subscription.update({

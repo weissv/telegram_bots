@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
+import { X, Trash2, Plus, Minus, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { CartItem } from '../types/index.js';
 import { useI18n } from '../i18n/useI18n.js';
+import { getCartLineKey } from '../hooks/useCart.js';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -9,12 +10,20 @@ interface CartDrawerProps {
   items: CartItem[];
   currency: string;
   totalAmount: number;
-  onUpdateQty: (productId: string, qty: number) => void;
-  onRemoveItem: (productId: string) => void;
+  checkoutEnabled: boolean;
+  disabledBannerText?: string | null;
+  onUpdateQty: (productId: string, qty: number, variant?: string) => void;
+  onRemoveItem: (productId: string, variant?: string) => void;
   onClearCart: () => void;
   onProceedCheckout: () => void;
   onHaptic: (type: 'light' | 'medium') => void;
 }
+
+const VARIANT_LABEL = {
+  ru: 'Вариант:',
+  uz: 'Variant:',
+  en: 'Option:',
+} as const;
 
 export function CartDrawer({
   isOpen,
@@ -22,18 +31,25 @@ export function CartDrawer({
   items,
   currency,
   totalAmount,
+  checkoutEnabled,
+  disabledBannerText,
   onUpdateQty,
   onRemoveItem,
   onClearCart,
   onProceedCheckout,
   onHaptic,
 }: CartDrawerProps) {
-  const { t, formatCurrency } = useI18n();
+  const { t, locale, formatCurrency } = useI18n();
 
   if (!isOpen) return null;
 
+  const variantPrefix = VARIANT_LABEL[locale] || VARIANT_LABEL.ru;
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 transition-opacity">
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 transition-opacity"
+      onClick={onClose}
+    >
       <div
         className="w-full max-h-[88vh] bg-[var(--c-bg)] border-t border-[var(--c-separator)] rounded-t-2xl shadow-xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -95,13 +111,22 @@ export function CartDrawer({
           ) : (
             <div className="divide-y divide-[var(--c-separator)]">
               {items.map((item) => {
+                const lineKey = getCartLineKey(item.product.id, item.variant);
                 const img =
                   item.product.images?.[0] ||
                   'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=120&q=80';
                 const itemTotal = Number(item.product.price) * item.quantity;
+                const otherVariantsQty = items
+                  .filter(
+                    (other) =>
+                      other.product.id === item.product.id &&
+                      getCartLineKey(other.product.id, other.variant) !== lineKey
+                  )
+                  .reduce((sum, other) => sum + other.quantity, 0);
+                const maxLineQty = Math.max(1, item.product.stock - otherVariantsQty);
 
                 return (
-                  <div key={item.product.id} className="py-3 flex items-center gap-3">
+                  <div key={lineKey} className="py-3 flex items-center gap-3">
                     <img
                       src={img}
                       alt=""
@@ -111,6 +136,11 @@ export function CartDrawer({
                       <h3 className="text-sm font-medium text-[var(--c-text)] truncate">
                         {item.product.title}
                       </h3>
+                      {item.variant && (
+                        <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-[var(--c-secondary)] border border-[var(--c-separator)] text-[11px] font-semibold text-[var(--c-text)]">
+                          {variantPrefix} {item.variant}
+                        </span>
+                      )}
                       <div className="text-xs text-[var(--c-hint)] tabular mt-0.5">
                         {formatCurrency(Number(item.product.price), currency)}
                       </div>
@@ -125,7 +155,7 @@ export function CartDrawer({
                           type="button"
                           onClick={() => {
                             onHaptic('light');
-                            onUpdateQty(item.product.id, item.quantity - 1);
+                            onUpdateQty(item.product.id, item.quantity - 1, item.variant);
                           }}
                           aria-label="-"
                         >
@@ -134,10 +164,10 @@ export function CartDrawer({
                         <span>{item.quantity}</span>
                         <button
                           type="button"
-                          disabled={item.quantity >= item.product.stock}
+                          disabled={item.quantity >= maxLineQty}
                           onClick={() => {
                             onHaptic('light');
-                            onUpdateQty(item.product.id, item.quantity + 1);
+                            onUpdateQty(item.product.id, item.quantity + 1, item.variant);
                           }}
                           aria-label="+"
                         >
@@ -149,7 +179,7 @@ export function CartDrawer({
                         type="button"
                         onClick={() => {
                           onHaptic('light');
-                          onRemoveItem(item.product.id);
+                          onRemoveItem(item.product.id, item.variant);
                         }}
                         className="p-1.5 text-[var(--c-hint)] hover:text-[var(--c-destructive)] transition-colors"
                         aria-label="Удалить"
@@ -170,6 +200,13 @@ export function CartDrawer({
             className="p-4 border-t border-[var(--c-separator)] bg-[var(--c-bg)] space-y-3"
             style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
           >
+            {!checkoutEnabled && disabledBannerText && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{disabledBannerText}</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-sm">
               <span className="text-[var(--c-hint)]">{t('cart.to_pay')}</span>
               <span className="text-lg font-bold text-[var(--c-text)] tabular">

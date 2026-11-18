@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, QrCode, ExternalLink, CheckCircle2, ShieldCheck, Check, AlertCircle } from 'lucide-react';
+import {
+  X,
+  QrCode,
+  ExternalLink,
+  CheckCircle2,
+  ShieldCheck,
+  Check,
+  AlertCircle,
+} from 'lucide-react';
 import { useI18n } from '../i18n/useI18n.js';
 
 interface PaynetPaymentModalProps {
@@ -9,8 +17,10 @@ interface PaynetPaymentModalProps {
   currency: string;
   paynetQrUrl: string;
   onConfirmPaid: () => Promise<void>;
+  onCancelOrder?: () => Promise<void>;
   onClose: () => void;
   isConfirming: boolean;
+  isCancelling?: boolean;
   errorMessage?: string | null;
 }
 
@@ -22,6 +32,10 @@ const MODAL_COPY = {
     howToPay: 'Как оплатить:',
     qrFallbackTitle: 'QR-код временно недоступен',
     qrFallbackHint: 'Нажмите «Открыть Paynet» ниже или скопируйте ссылку для оплаты.',
+    confirmBtn: 'Я оплатил — отправить на проверку',
+    reviewNote:
+      'После нажатия кнопки заказ перейдёт в статус «На проверке оплаты». Оператор магазина проверит поступление средств и подтвердит заказ.',
+    cancelOrderBtn: 'Отменить неоплаченный заказ',
   },
   uz: {
     copyAmount: '📋 Summani nusxalash',
@@ -30,6 +44,10 @@ const MODAL_COPY = {
     howToPay: "Qanday to'lanadi:",
     qrFallbackTitle: 'QR-kod vaqtincha yuklanmadi',
     qrFallbackHint: "Quyidagi Paynet tugmasini bosing yoki to'lov havolasini nusxalang.",
+    confirmBtn: "Men to'ladim — tekshiruvga yuborish",
+    reviewNote:
+      "Tugmani bosganingizdan so'ng buyurtma «To'lov tekshirilmoqda» holatiga o'tadi. Do'kon operatori mablag' tushganini tasdiqlaydi.",
+    cancelOrderBtn: "To'lanmagan buyurtmani bekor qilish",
   },
   en: {
     copyAmount: '📋 Copy amount',
@@ -38,6 +56,10 @@ const MODAL_COPY = {
     howToPay: 'How to pay:',
     qrFallbackTitle: 'QR image unavailable',
     qrFallbackHint: 'Tap the Paynet button below or copy the payment link.',
+    confirmBtn: 'I paid — submit for verification',
+    reviewNote:
+      'After clicking, your order moves to payment review. The store operator will verify receipt of funds and confirm your order.',
+    cancelOrderBtn: 'Cancel unpaid order',
   },
 } as const;
 
@@ -73,8 +95,10 @@ export function PaynetPaymentModal({
   currency,
   paynetQrUrl,
   onConfirmPaid,
+  onCancelOrder,
   onClose,
   isConfirming,
+  isCancelling = false,
   errorMessage,
 }: PaynetPaymentModalProps) {
   const { t, locale, formatCurrency } = useI18n();
@@ -115,7 +139,10 @@ export function PaynetPaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 transition-opacity">
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 transition-opacity"
+      onClick={() => !isConfirming && !isCancelling && onClose()}
+    >
       <div
         className="w-full max-h-[94vh] bg-[var(--c-bg)] border-t border-[var(--c-separator)] rounded-t-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-250"
         onClick={(e) => e.stopPropagation()}
@@ -135,7 +162,7 @@ export function PaynetPaymentModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isConfirming}
+              disabled={isConfirming || isCancelling}
               className="p-1 rounded-full text-[var(--c-hint)] hover:text-[var(--c-text)]"
               aria-label="Закрыть"
             >
@@ -228,6 +255,9 @@ export function PaynetPaymentModal({
               <p>• {t('checkout.paynet_step2')}</p>
               <p>• {t('checkout.paynet_step3')}</p>
             </div>
+            <p className="text-[11px] text-[var(--c-hint)] pt-1 border-t border-[var(--c-separator)]">
+              {copy.reviewNote}
+            </p>
           </div>
 
           {errorMessage && (
@@ -253,18 +283,29 @@ export function PaynetPaymentModal({
               <ExternalLink className="w-4 h-4" />
             </a>
 
-            {/* Confirm Paid button */}
+            {/* Confirm Paid -> PAYMENT_REVIEW button */}
             <button
               type="button"
-              disabled={isConfirming}
+              disabled={isConfirming || isCancelling}
               onClick={onConfirmPaid}
               className="btn-tinted w-full flex items-center justify-center gap-2 text-sm font-semibold"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>
-                {isConfirming ? t('checkout.processing_btn') : t('checkout.paynet_confirm_btn')}
+                {isConfirming ? t('checkout.processing_btn') : copy.confirmBtn}
               </span>
             </button>
+
+            {onCancelOrder && (
+              <button
+                type="button"
+                disabled={isConfirming || isCancelling}
+                onClick={onCancelOrder}
+                className="w-full py-2 text-xs font-medium text-[var(--c-destructive)] hover:underline disabled:opacity-50"
+              >
+                {isCancelling ? t('checkout.processing_btn') : copy.cancelOrderBtn}
+              </button>
+            )}
           </div>
         </div>
       </div>

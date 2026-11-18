@@ -65,13 +65,18 @@ export const en: TranslationDictionary = {
   'orders.empty': '📋 <b>You have no orders yet.</b>\n\nStart shopping in 📦 Catalog!',
   'orders.browse': '📦 Browse catalog',
   'orders.status_pending': '⏳ Pending payment',
+  'orders.status_payment_review': '🔍 Payment under review',
   'orders.status_paid': '✅ Paid / Processing',
   'orders.status_delivered': '🚚 Delivered',
   'orders.status_cancelled': '❌ Cancelled',
+  'orders.status_refunded': '↩️ Refunded',
   'orders.order_line': '🧾 <b>Order #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Status:</b> {status}\n💰 <b>Total:</b> <code>{total}</code>\n📦 <i>Items: {items}</i>',
+  'orders.notify_payment_review': '🔍 <b>Payment claim received for Order #{orderId}!</b>\n\nWe sent your payment details to the store operator for verification. You will be notified once confirmed.',
   'orders.notify_paid': '✅ <b>Payment confirmed for Order #{orderId}!</b>\n\nWe are now preparing your order for shipping.',
+  'orders.notify_paid_with_receipt': '✅ <b>Payment confirmed for Order #{orderId}!</b>\n\nWe are now preparing your order for shipping.\n🧾 Fiscal receipt: {receiptUrl}',
   'orders.notify_delivered': '🚚 <b>Order #{orderId} has been delivered!</b>\n\nThank you for shopping with us!',
   'orders.notify_cancelled': '❌ <b>Order #{orderId} has been cancelled.</b>\n\nPlease contact the store if you have any questions.',
+  'orders.notify_refunded': '↩️ <b>Order #{orderId} has been refunded.</b>\n\nPlease contact store support if you have any questions.',
 
   // ─── WebApp ───
   'webapp.launch': '🚀 Launch interactive store below:',
@@ -94,6 +99,12 @@ export const en: TranslationDictionary = {
   'merchant.new_order': '🔔 <b>NEW ORDER!</b>\n\n🧾 Order: <code>#{orderId}</code>\n💰 Total: <b>{total}</b>\n👤 Customer: {customerName}\n📱 Telegram ID: <code>{telegramId}</code>\n📦 Items:\n{items}',
 
   // ─── Billing / Subscription ───
+  'billing.status_pending_payment': 'Pending payment',
+  'billing.status_pending_review': 'Under review',
+  'billing.status_active': 'Active',
+  'billing.status_past_due': 'Past due',
+  'billing.status_canceled': 'Canceled',
+  'billing.status_trialing': 'Trial',
   'billing.expired_warning': '🔔 <b>Subscription Renewal Notice</b>\n\nSubscription for <b>{storeName}</b> recently expired.',
   'billing.deactivated': '⚠️ <b>Store Suspended</b>\n\nSubscription for <b>{storeName}</b> has expired.',
 
@@ -179,17 +190,40 @@ export const en: TranslationDictionary = {
   'checkout.paynet_confirm_btn': '✅ I Paid the Order',
   'checkout.paynet_scan_qr': 'Or scan the QR code with mobile banking:',
   'checkout.paynet_waiting_notice': 'Order registered. Awaiting merchant payment verification.',
+  'checkout.delivery_method': 'Delivery Method',
+  'checkout.delivery_courier': 'Courier Delivery',
+  'checkout.delivery_pickup': 'Store Pickup',
+  'checkout.items_subtotal': 'Items',
+  'checkout.delivery_fee': 'Delivery',
+  'checkout.delivery_free': 'Free',
+  'checkout.free_delivery_hint': 'Free delivery from {threshold}',
+  'checkout.phone_required': 'Please enter your contact phone number',
+  'checkout.address_required': 'Please enter your delivery address',
+  'checkout.payment_review_notice': 'Payment claim for order #{orderId} has been sent to the store operator for review.',
+  'checkout.paynet_unavailable': 'Online payment is currently disabled by the seller. Please contact store support.',
+  'checkout.store_not_published': 'This store has not been published by the seller yet.',
+  'checkout.demo_disabled': 'Demo storefront: live orders and real payments are disabled.',
 
   // ─── Order Success ───
   'success.heading': 'Order Paid!',
+  'success.heading_review': 'Payment Under Review!',
   'success.subtitle': 'We have started preparing your order for shipping.',
+  'success.subtitle_review': 'Your payment confirmation has been sent to the store operator for verification.',
   'success.order_num': 'Order: #{id}',
   'success.items_qty': 'Items count:',
   'success.total_paid': 'Total paid:',
   'success.status_label': 'Status:',
   'success.status_paid': 'Paid',
+  'success.status_review': 'Under operator review',
   'success.back_catalog': 'Return to Store',
   'success.close_app': 'Close App',
+
+  // ─── Errors ───
+  'errors.unauthorized': 'Unauthorized. Order access token or Telegram authentication required.',
+  'errors.order_not_found': 'Order not found.',
+  'errors.invalid_status': 'Invalid order status.',
+  'errors.payment_id_required': 'Please provide the payment transaction/receipt ID (paymentId) to confirm payment.',
+  'errors.duplicate_payment_id': 'This paymentId is already linked to another order.',
 
   // ─── Header ───
   'header.default_title': 'Product Catalog',

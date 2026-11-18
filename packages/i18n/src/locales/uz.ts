@@ -65,13 +65,18 @@ export const uz: TranslationDictionary = {
   'orders.empty': "📋 <b>Sizda hali buyurtma yo'q.</b>\n\nXaridni 📦 Katalogda boshlang!",
   'orders.browse': "📦 Katalogga o'tish",
   'orders.status_pending': "⏳ To'lov kutilmoqda",
+  'orders.status_payment_review': "🔍 To'lov tekshirilmoqda",
   'orders.status_paid': "✅ To'langan / Jarayonda",
   'orders.status_delivered': '🚚 Yetkazildi',
   'orders.status_cancelled': '❌ Bekor qilindi',
+  'orders.status_refunded': '↩️ Pul qaytarildi',
   'orders.order_line': "🧾 <b>Buyurtma #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Holat:</b> {status}\n💰 <b>Summa:</b> <code>{total}</code>\n📦 <i>Mahsulotlar: {items}</i>",
+  'orders.notify_payment_review': "🔍 <b>#{orderId} buyurtma bo'yicha to'lov so'rovi qabul qilindi!</b>\n\nMa'lumotlar do'kon operatoriga tekshirish uchun yuborildi. Mablag' tushgani tasdiqlangach xabar olasiz.",
   'orders.notify_paid': "✅ <b>#{orderId} buyurtma to'lovi tasdiqlandi!</b>\n\nBuyurtmangizni jo'natishga tayyorlamoqdamiz.",
+  'orders.notify_paid_with_receipt': "✅ <b>#{orderId} buyurtma to'lovi tasdiqlandi!</b>\n\nBuyurtmangizni jo'natishga tayyorlamoqdamiz.\n🧾 Fiskal chek: {receiptUrl}",
   'orders.notify_delivered': "🚚 <b>#{orderId} buyurtma yetkazib berildi!</b>\n\nXaridingiz uchun rahmat! Yana kutib qolamiz.",
   'orders.notify_cancelled': "❌ <b>#{orderId} buyurtma bekor qilindi.</b>\n\nSavollaringiz bo'lsa, do'kon bilan bog'laning.",
+  'orders.notify_refunded': "↩️ <b>#{orderId} buyurtma bo'yicha mablag' qaytarildi.</b>\n\nSavollaringiz bo'lsa, do'kon qo'llab-quvvatlash xizmati bilan bog'laning.",
 
   // ─── WebApp ───
   'webapp.launch': "🚀 Quyida interaktiv do'konni oching:",
@@ -94,6 +99,12 @@ export const uz: TranslationDictionary = {
   'merchant.new_order': "🔔 <b>YANGI BUYURTMA!</b>\n\n🧾 Buyurtma: <code>#{orderId}</code>\n💰 Summa: <b>{total}</b>\n👤 Xaridor: {customerName}\n📱 Telegram ID: <code>{telegramId}</code>\n📦 Mahsulotlar:\n{items}",
 
   // ─── Billing / Subscription ───
+  'billing.status_pending_payment': "To'lov kutilmoqda",
+  'billing.status_pending_review': 'Tekshiruvda',
+  'billing.status_active': 'Faol',
+  'billing.status_past_due': "Muddati o'tgan",
+  'billing.status_canceled': 'Bekor qilingan',
+  'billing.status_trialing': 'Sinov davri',
   'billing.expired_warning': "🔔 <b>Obunani yangilash eslatmasi</b>\n\n<b>{storeName}</b> obunasi tugadi.",
   'billing.deactivated': "⚠️ <b>Do'kon to'xtatildi</b>\n\n<b>{storeName}</b> obuna muddati tugadi.",
 
@@ -179,17 +190,40 @@ export const uz: TranslationDictionary = {
   'checkout.paynet_confirm_btn': "✅ Buyurtmani to'ladim",
   'checkout.paynet_scan_qr': "Yoki mobil bank ilovasida QR kodni skanerlang:",
   'checkout.paynet_waiting_notice': "Buyurtma qabul qilindi. Sotuvchi to'lovni tasdiqlashini kuting.",
+  'checkout.delivery_method': 'Olish usuli',
+  'checkout.delivery_courier': 'Kuryer orqali yetkazib berish',
+  'checkout.delivery_pickup': "Do'kondan olib ketish",
+  'checkout.items_subtotal': 'Mahsulotlar',
+  'checkout.delivery_fee': 'Yetkazib berish',
+  'checkout.delivery_free': 'Bepul',
+  'checkout.free_delivery_hint': "{threshold} dan boshlab bepul yetkazib berish",
+  'checkout.phone_required': 'Aloqa uchun telefon raqamini kiriting',
+  'checkout.address_required': 'Yetkazib berish manzilini kiriting',
+  'checkout.payment_review_notice': "#{orderId} buyurtma to'lovi tekshirish uchun do'kon operatoriga yuborildi.",
+  'checkout.paynet_unavailable': "Onlayn to'lov sotuvchi tomonidan vaqtincha o'chirilgan. Do'kon qo'llab-quvvatlash xizmatiga murojaat qiling.",
+  'checkout.store_not_published': "Do'kon hali sotuvchi tomonidan nashr qilinmagan.",
+  'checkout.demo_disabled': "Demo vitrina: haqiqiy buyurtma va to'lovlar o'chirilgan.",
 
   // ─── Order Success ───
   'success.heading': "Buyurtma to'landi!",
+  'success.heading_review': "To'lov tekshiruvda!",
   'success.subtitle': "Biz buyurtmangizni jo'natishga tayyorlashni boshladik.",
+  'success.subtitle_review': "To'lov do'kon operatoriga tekshirish uchun yuborildi. Tasdiqlangach sizga xabar beramiz.",
   'success.order_num': 'Raqam: #{id}',
   'success.items_qty': 'Buyurtmadagi mahsulotlar:',
   'success.total_paid': "To'langan summa:",
   'success.status_label': 'Holati:',
   'success.status_paid': "To'landi",
+  'success.status_review': 'Operator tekshiruvida',
   'success.back_catalog': "Do'konga qaytish",
   'success.close_app': 'Ilovani yopish',
+
+  // ─── Errors ───
+  'errors.unauthorized': "Ruxsat berilmagan. Buyurtma tokeni yoki Telegram avtorizatsiyasi talab qilinadi.",
+  'errors.order_not_found': 'Buyurtma topilmadi.',
+  'errors.invalid_status': "Buyurtma holati noto'g'ri.",
+  'errors.payment_id_required': "To'lovni tasdiqlash uchun tranzaksiya / chek raqamini (paymentId) kiriting.",
+  'errors.duplicate_payment_id': 'Ushbu paymentId raqami boshqa buyurtmaga allaqachon biriktirilgan.',
 
   // ─── Header ───
   'header.default_title': 'Mahsulotlar katalogi',

@@ -12,6 +12,9 @@ interface SalesCopy {
   body: string;
 }
 
+const showDemoCreds =
+  process.env.ALLOW_DEMO_LOGIN === 'true' || process.env.NODE_ENV !== 'production';
+
 const SALES_COPY: Record<BotLang, SalesCopy> = {
   ru: {
     miniAppBtn: '📱 Демо: Telegram Mini App витрина',
@@ -38,8 +41,7 @@ const SALES_COPY: Record<BotLang, SalesCopy> = {
   • Для пользователей на слабых смартфонах или медленном интернете
 
 3️⃣ <b>💼 Панель управления (Admin Backoffice):</b>
-  • Веб-кабинет для владельца магазина: остатки, заказы, аналитика
-  • Логин: <code>demo_merchant@telegram-commerce.local</code> / Пароль: <code>password123</code>
+  • Веб-кабинет для владельца магазина: остатки, заказы, аналитика${showDemoCreds ? '\n  • Логин: <code>demo_merchant@telegram-commerce.local</code> / Пароль: <code>password123</code>' : ''}
 
 👇 <b>Нажмите на нужную кнопку ниже:</b>
 `.trim(),
@@ -69,8 +71,7 @@ O'zbekiston va MDHda Telegram orqali zamonaviy e-commerce yechimlari vitrinasiga
   • Sekin internet yoki oddiy smartfonlar uchun qulay
 
 3️⃣ <b>💼 Boshqaruv paneli (Admin Backoffice):</b>
-  • Do'kon egasi uchun veb-kabinet: qoldiqlar, buyurtmalar, tahlil
-  • Login: <code>demo_merchant@telegram-commerce.local</code> / Parol: <code>password123</code>
+  • Do'kon egasi uchun veb-kabinet: qoldiqlar, buyurtmalar, tahlil${showDemoCreds ? '\n  • Login: <code>demo_merchant@telegram-commerce.local</code> / Parol: <code>password123</code>' : ''}
 
 👇 <b>Quyidagi kerakli tugmani bosing:</b>
 `.trim(),
@@ -100,8 +101,7 @@ Welcome to the showcase of next-gen Telegram e-commerce solutions for Uzbekistan
   • Great for older devices or slow internet connections
 
 3️⃣ <b>💼 Merchant Backoffice (Admin Panel):</b>
-  • Web dashboard for store owners: stock, orders, analytics
-  • Login: <code>demo_merchant@telegram-commerce.local</code> / Password: <code>password123</code>
+  • Web dashboard for store owners: stock, orders, analytics${showDemoCreds ? '\n  • Login: <code>demo_merchant@telegram-commerce.local</code> / Password: <code>password123</code>' : ''}
 
 👇 <b>Tap a button below to get started:</b>
 `.trim(),

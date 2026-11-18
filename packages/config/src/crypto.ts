@@ -160,3 +160,69 @@ export function validateTelegramInitData(
     return { isValid: false, error: err?.message || 'Verification exception' };
   }
 }
+
+export interface BindTokenVerificationResult {
+  valid: boolean;
+  tenantId?: string;
+  error?: string;
+}
+
+/**
+ * Generates a deterministic HMAC-SHA256 signed Telegram deep-link bind token
+ * (`bind_<32hex>_<16sig>`, 54 chars total, within Telegram's 64-byte /start payload limit).
+ */
+export function createBindToken(tenantId: string, secret?: string): string {
+  const effectiveSecret = secret || process.env.JWT_SECRET || '';
+  if (!effectiveSecret) {
+    throw new Error('Secret is required to sign bind token');
+  }
+  const compactId = tenantId.replace(/-/g, '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(compactId)) {
+    throw new Error('tenantId must be a valid UUID');
+  }
+  const sig = crypto
+    .createHmac('sha256', effectiveSecret)
+    .update(`bind:${compactId}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `bind_${compactId}_${sig}`;
+}
+
+/**
+ * Verifies an HMAC-SHA256 signed bind token (`bind_<32hex>_<16sig>` or `<32hex>_<16sig>`),
+ * restoring the hyphenated tenant UUID on success.
+ */
+export function verifyBindToken(token: string, secret?: string): BindTokenVerificationResult {
+  try {
+    const effectiveSecret = secret || process.env.JWT_SECRET || '';
+    if (!token || !effectiveSecret) {
+      return { valid: false, error: 'Missing token or secret' };
+    }
+
+    const trimmed = token.trim();
+    const raw = trimmed.startsWith('bind_') ? trimmed.slice(5) : trimmed;
+    const match = /^([0-9a-f]{32})_([0-9a-f]{16})$/i.exec(raw);
+    if (!match) {
+      return { valid: false, error: 'Malformed bind token' };
+    }
+
+    const compactId = match[1].toLowerCase();
+    const providedSig = match[2].toLowerCase();
+    const expectedSig = crypto
+      .createHmac('sha256', effectiveSecret)
+      .update(`bind:${compactId}`)
+      .digest('hex')
+      .slice(0, 16);
+
+    const a = Buffer.from(providedSig, 'hex');
+    const b = Buffer.from(expectedSig, 'hex');
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return { valid: false, error: 'Invalid bind token signature' };
+    }
+
+    const tenantId = `${compactId.slice(0, 8)}-${compactId.slice(8, 12)}-${compactId.slice(12, 16)}-${compactId.slice(16, 20)}-${compactId.slice(20)}`;
+    return { valid: true, tenantId };
+  } catch (err: any) {
+    return { valid: false, error: err?.message || 'Bind token verification error' };
+  }
+}

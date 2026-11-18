@@ -1,5 +1,12 @@
+import crypto from 'node:crypto';
 import { type Context } from 'grammy';
-import { DEFAULT_PAYNET_QR_URL, PLAN_PRICING, PLAN_TIERS, type PlanTier } from '@telegram-commerce/config';
+import {
+  getEnv,
+  PLATFORM_PAYNET_QR_URL,
+  PLAN_PRICING,
+  PLAN_TIERS,
+  type PlanTier,
+} from '@telegram-commerce/config';
 
 export type BotLang = 'ru' | 'uz' | 'en';
 
@@ -12,7 +19,7 @@ export function resolveLang(ctx: Context): BotLang {
 }
 
 export function escapeHtml(value: string): string {
-  return value
+  return String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -24,6 +31,29 @@ export function formatUzs(amount: number, lang: BotLang = 'ru'): string {
   if (lang === 'uz') return `${formatted} so'm`;
   if (lang === 'en') return `${formatted} UZS`;
   return `${formatted} сум`;
+}
+
+export function getSuperAdminTelegramId(): string {
+  const env = getEnv();
+  return env.SUPERADMIN_TELEGRAM_ID || env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
+}
+
+export function generateInvoiceNumber(): string {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  const rand = crypto.randomInt(1000, 9999);
+  return `INV-${y}${m}${d}-${rand}`;
+}
+
+export function generateStrongPassword(): string {
+  return `Mr${crypto.randomBytes(6).toString('base64url')}!9`;
+}
+
+export function computeAdditivePeriodEnd(existingEnd?: Date | null): Date {
+  const baseMs = Math.max(Date.now(), existingEnd ? new Date(existingEnd).getTime() : 0);
+  return new Date(baseMs + 30 * 24 * 60 * 60 * 1000);
 }
 
 export interface PlanDetails {
@@ -100,35 +130,38 @@ export function getPlanDetails(plan: PlanTier): PlanDetails {
   };
 }
 
-export function getPeriodEndForPlan(plan: PlanTier): Date {
+export function getPeriodEndForPlan(plan: PlanTier, existingEnd?: Date | null): Date {
   if (plan === PLAN_TIERS.STANDALONE_LIFETIME) {
     const end = new Date();
     end.setFullYear(end.getFullYear() + 100);
     return end;
   }
-  return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  return computeAdditivePeriodEnd(existingEnd);
 }
 
-export function buildPaynetQrImageUrl(paynetUrl: string = DEFAULT_PAYNET_QR_URL): string {
+export function buildPaynetQrImageUrl(paynetUrl: string = PLATFORM_PAYNET_QR_URL): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(paynetUrl)}`;
 }
 
 /**
  * Telegram enforces a strict 64-byte limit on callback_data.
- * For UUID tenant IDs with STANDALONE_LIFETIME, strip hyphens (exact 64 bytes) and restore on parse.
+ * Supports either `sub:confirm:<compactSubId>` (44 bytes) OR legacy `sub:confirm:<id>:<plan>`.
  */
-export function buildSubConfirmCallback(tenantId: string, plan: string): string {
-  const full = `sub:confirm:${tenantId}:${plan}`;
+export function buildSubConfirmCallback(idOrTenantId: string, plan?: string): string {
+  const compactId = idOrTenantId.replace(/-/g, '');
+  if (!plan) {
+    return `sub:confirm:${compactId}`.slice(0, 64);
+  }
+  const full = `sub:confirm:${idOrTenantId}:${plan}`;
   if (Buffer.byteLength(full, 'utf8') <= 64) {
     return full;
   }
-  const compactTenantId = tenantId.replace(/-/g, '');
-  const compact = `sub:confirm:${compactTenantId}:${plan}`;
+  const compact = `sub:confirm:${compactId}:${plan}`;
   if (Buffer.byteLength(compact, 'utf8') <= 64) {
     return compact;
   }
   const shortPlan = plan === PLAN_TIERS.STANDALONE_LIFETIME ? 'STANDALONE' : plan;
-  return `sub:confirm:${compactTenantId}:${shortPlan}`.slice(0, 64);
+  return `sub:confirm:${compactId}:${shortPlan}`.slice(0, 64);
 }
 
 export function restoreUuid(rawId: string): string {
@@ -138,34 +171,42 @@ export function restoreUuid(rawId: string): string {
   return rawId;
 }
 
-export function buildAdminSubApproveCallback(tenantId: string, plan: string): string {
-  const compactId = tenantId.replace(/-/g, '');
+export function buildAdminSubApproveCallback(id: string, plan?: string): string {
+  const compactId = id.replace(/-/g, '');
+  if (!plan) {
+    return `admin:sub:approve:${compactId}`;
+  }
   const shortPlan = plan === PLAN_TIERS.STANDALONE_LIFETIME ? 'STANDALONE' : plan;
   return `admin:sub:approve:${compactId}:${shortPlan}`;
 }
 
-export function buildAdminSubSuspendCallback(tenantId: string): string {
-  return `admin:sub:suspend:${tenantId.replace(/-/g, '')}`;
+export function buildAdminSubSuspendCallback(id: string): string {
+  return `admin:sub:suspend:${id.replace(/-/g, '')}`;
 }
 
-export function parseAdminSubCallback(rawTenantId: string, rawPlan?: string): {
+export function parseAdminSubCallback(rawId: string, rawPlan?: string): {
   tenantId: string;
+  id: string;
   plan: PlanTier;
 } {
+  const restored = restoreUuid(rawId);
   return {
-    tenantId: restoreUuid(rawTenantId),
+    tenantId: restored,
+    id: restored,
     plan: normalizePlanTier(rawPlan),
   };
 }
 
-export function parseSubConfirmCallback(rawTenantId: string, rawPlan: string): {
+export function parseSubConfirmCallback(rawId: string, rawPlan?: string): {
   tenantId: string;
+  id: string;
   plan: PlanTier;
 } {
-  const tenantId = rawTenantId !== 'platform' ? restoreUuid(rawTenantId) : rawTenantId;
+  const restored = rawId !== 'platform' ? restoreUuid(rawId) : rawId;
 
   return {
-    tenantId,
+    tenantId: restored,
+    id: restored,
     plan: normalizePlanTier(rawPlan),
   };
 }

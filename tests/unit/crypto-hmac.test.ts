@@ -5,6 +5,8 @@ import {
   decryptBotToken,
   validateTelegramInitData,
   generateWebhookSecret,
+  createBindToken,
+  verifyBindToken,
 } from '@telegram-commerce/config';
 
 describe('Cryptographic Security & Telegram HMAC Validator', () => {
@@ -42,7 +44,6 @@ describe('Cryptographic Security & Telegram HMAC Validator', () => {
   });
 
   describe('Telegram WebApp initData HMAC-SHA256 Verification', () => {
-    // Helper to generate valid Telegram initData signature
     function generateMockInitData(
       botToken: string,
       params: Record<string, string>,
@@ -86,7 +87,6 @@ describe('Cryptographic Security & Telegram HMAC Validator', () => {
         user: JSON.stringify({ id: 12345678, first_name: 'Original' }),
       });
 
-      // Tamper user name in query string without updating hash
       const tampered = rawInitData.replace('Original', 'Hacker');
       const result = validateTelegramInitData(tampered, testBotToken);
 
@@ -95,7 +95,6 @@ describe('Cryptographic Security & Telegram HMAC Validator', () => {
     });
 
     it('should reject expired initData (> 24 hours old)', () => {
-      // 25 hours in the past
       const expiredOffset = -(25 * 3600);
       const rawInitData = generateMockInitData(
         testBotToken,
@@ -120,6 +119,38 @@ describe('Cryptographic Security & Telegram HMAC Validator', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.error).toContain('Invalid HMAC signature');
+    });
+  });
+
+  describe('Signed Deep-Link Bind Tokens (createBindToken / verifyBindToken)', () => {
+    const bindSecret = 'super-secret-jwt-key-123456';
+    const tenantUuid = 'a1b2c3d4-e5f6-4789-abcd-ef0123456789';
+
+    it('should generate a deterministic <=55 char bind_<32hex>_<16sig> token and verify back to UUID', () => {
+      const token = createBindToken(tenantUuid, bindSecret);
+      expect(token).toMatch(/^bind_[0-9a-f]{32}_[0-9a-f]{16}$/);
+      expect(Buffer.byteLength(token, 'utf8')).toBeLessThanOrEqual(55);
+
+      const verified = verifyBindToken(token, bindSecret);
+      expect(verified.valid).toBe(true);
+      expect(verified.tenantId).toBe(tenantUuid);
+
+      // Should also accept raw suffix without bind_ prefix
+      const rawVerified = verifyBindToken(token.slice(5), bindSecret);
+      expect(rawVerified.valid).toBe(true);
+      expect(rawVerified.tenantId).toBe(tenantUuid);
+    });
+
+    it('should reject tampered signature, wrong secret, or malformed tokens', () => {
+      const token = createBindToken(tenantUuid, bindSecret);
+      const lastChar = token.endsWith('0') ? '1' : '0';
+      const tampered = `${token.slice(0, -1)}${lastChar}`;
+
+      expect(verifyBindToken(tampered, bindSecret).valid).toBe(false);
+      expect(verifyBindToken(token, 'wrong-secret-000000').valid).toBe(false);
+      expect(verifyBindToken('bind_notauuid_1234', bindSecret).valid).toBe(false);
+      expect(verifyBindToken('', bindSecret).valid).toBe(false);
+      expect(() => createBindToken('not-a-uuid', bindSecret)).toThrow();
     });
   });
 });

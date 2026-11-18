@@ -1,8 +1,19 @@
 import { InlineKeyboard } from 'grammy';
-import { BotContext } from '../types.js';
+import { BotContext, TenantInfo } from '../types.js';
 import { getMainMenuKeyboard } from '../keyboards/index.js';
-import { t, formatCurrency } from '@telegram-commerce/i18n';
+import { t, formatCurrency, type Locale } from '@telegram-commerce/i18n';
 import { PLAN_TIERS } from '@telegram-commerce/config';
+
+export function isStorefrontDisabled(tenant: TenantInfo): boolean {
+  return tenant.isActive === false || tenant.botConfigActive === false;
+}
+
+export function buildDisabledStorefrontMessage(tenant: TenantInfo, locale: Locale): string {
+  const support = tenant.themeConfig?.supportContact
+    ? `\n📞 ${locale === 'uz' ? "Qo'llab-quvvatlash" : locale === 'en' ? 'Support' : 'Поддержка'}: ${escapeHtml(tenant.themeConfig.supportContact)}`
+    : '';
+  return `⚠️ ${t(locale, 'checkout.store_not_published')}${support}`;
+}
 
 /**
  * Handles /start command. Shows language selector on first interaction,
@@ -19,6 +30,11 @@ export async function handleStart(ctx: BotContext) {
 
   const locale = ctx.locale;
 
+  if (isStorefrontDisabled(tenant)) {
+    await ctx.reply(buildDisabledStorefrontMessage(tenant, locale), { parse_mode: 'HTML' });
+    return;
+  }
+
   // Deep linking: t.me/bot?start=prod_<id>
   const match = (ctx as any).match;
   const payload = typeof match === 'string' ? match.trim() : '';
@@ -29,10 +45,35 @@ export async function handleStart(ctx: BotContext) {
         where: { id: productId, is_active: true },
       });
       if (product) {
-        const keyboard = new InlineKeyboard()
-          .text(t(locale, 'catalog.add_to_cart'), `cart:add:${product.id}`)
-          .row()
-          .text(t(locale, 'catalog.view_cart'), 'cart:view');
+        const variants = Array.isArray((product as any).variants)
+          ? ((product as any).variants as any[]).map((v) => String(v).trim()).filter(Boolean)
+          : [];
+        const keyboard = new InlineKeyboard();
+        if (product.stock <= 0) {
+          keyboard.text(t(locale, 'catalog.stock_out'), 'noop');
+        } else if (variants.length > 0) {
+          const compactId = product.id.replace(/-/g, '');
+          const visibleVariants = variants.slice(0, 8);
+          for (let i = 0; i < visibleVariants.length; i += 4) {
+            const chunk = visibleVariants.slice(i, i + 4).map((v, offset) =>
+              InlineKeyboard.text(`🛒 ${v.slice(0, 14)}`, `cart:v:${compactId}:${i + offset}`)
+            );
+            keyboard.row(...chunk);
+          }
+        } else {
+          keyboard.text(t(locale, 'catalog.add_to_cart'), `cart:add:${product.id}`);
+        }
+        keyboard.row().text(t(locale, 'catalog.view_cart'), 'cart:view');
+
+        const variantsLine =
+          variants.length > 0
+            ? `\n📏 <b>${locale === 'uz' ? 'Variantlar' : locale === 'en' ? 'Options' : 'Варианты'}:</b> ${variants.map(escapeHtml).join(', ')}`
+            : '';
+
+        const stockText =
+          product.stock <= 0
+            ? t(locale, 'catalog.stock_out')
+            : `${product.stock}`;
 
         const caption = `
 <b>${escapeHtml(product.title)}</b> (${escapeHtml(product.category)})
@@ -40,7 +81,7 @@ export async function handleStart(ctx: BotContext) {
 ${escapeHtml(product.description || '')}
 
 💰 <b>${locale === 'ru' ? 'Цена' : locale === 'en' ? 'Price' : 'Narxi'}:</b> ${formatCurrency(Number(product.price), tenant.currency || 'UZS', locale)}
-📦 <b>${locale === 'ru' ? 'В наличии' : locale === 'en' ? 'In stock' : 'Mavjud'}:</b> ${product.stock}
+📦 <b>${locale === 'ru' ? 'В наличии' : locale === 'en' ? 'In stock' : 'Mavjud'}:</b> ${stockText}${variantsLine}
 `.trim();
 
         if (product.images?.[0]) {

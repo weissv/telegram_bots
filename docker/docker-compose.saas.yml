@@ -6,15 +6,13 @@ services:
     container_name: tg_commerce_postgres
     restart: always
     environment:
-      POSTGRES_DB: telegram_commerce
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_commerce}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-telegram_commerce}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,10 +21,13 @@ services:
     image: redis:7-alpine
     container_name: tg_commerce_redis
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   api:
     build:
@@ -35,26 +36,31 @@ services:
     container_name: tg_commerce_api
     restart: always
     environment:
+      NODE_ENV: production
       MODE: saas
       PORT: 3000
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/telegram_commerce?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-telegram_commerce}?schema=public
       REDIS_URL: redis://redis:6379
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
-      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-http://localhost:5173}
-      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5174}
-      PUBLIC_LANDING_URL: ${PUBLIC_LANDING_URL:-http://localhost:5175}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      MASTER_BOT_TOKEN: ${MASTER_BOT_TOKEN:-}
+      MASTER_BOT_USERNAME: ${MASTER_BOT_USERNAME:-miraiedu_bot}
+      SUPERADMIN_TELEGRAM_ID: ${SUPERADMIN_TELEGRAM_ID:-}
+      ALLOW_DEMO_LOGIN: ${ALLOW_DEMO_LOGIN:-false}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
+      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-}
+      PUBLIC_LANDING_URL: ${PUBLIC_LANDING_URL:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
 
   master-bot:
     build:
@@ -63,16 +69,22 @@ services:
     container_name: tg_commerce_masterbot
     restart: always
     environment:
+      NODE_ENV: production
       MODE: saas
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/telegram_commerce?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-telegram_commerce}?schema=public
       REDIS_URL: redis://redis:6379
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
-      MASTER_BOT_TOKEN: ${MASTER_BOT_TOKEN}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
-      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-http://localhost:5173}
-      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-http://localhost:5174}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      MASTER_BOT_TOKEN: ${MASTER_BOT_TOKEN:?MASTER_BOT_TOKEN is required}
+      MASTER_BOT_USERNAME: ${MASTER_BOT_USERNAME:-miraiedu_bot}
+      SUPERADMIN_TELEGRAM_ID: ${SUPERADMIN_TELEGRAM_ID:-}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
+      PUBLIC_MINIAPP_URL: ${PUBLIC_MINIAPP_URL:-}
+      PUBLIC_ADMIN_URL: ${PUBLIC_ADMIN_URL:-}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   miniapp:

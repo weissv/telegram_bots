@@ -1,4 +1,4 @@
-const API_BASE =
+export const API_BASE =
   import.meta.env.VITE_API_URL ??
   (typeof window !== 'undefined' && window.location.port === '5174'
     ? 'http://localhost:3000'
@@ -34,9 +34,15 @@ export async function apiRequest<T = any>(
   });
 
   if (response.status === 401) {
-    clearAuthToken();
-    window.location.reload();
-    throw new Error('Session expired');
+    const isAuthEndpoint =
+      endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+    if (token && !isAuthEndpoint) {
+      clearAuthToken();
+      window.location.reload();
+      throw new Error('Session expired');
+    }
+    const errData = await response.json().catch(() => ({ error: 'Неверный email или пароль' }));
+    throw new Error(errData.error || 'Неверный email или пароль');
   }
 
   if (!response.ok) {

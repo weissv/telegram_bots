@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Globe, X, User } from 'lucide-react';
+import { Search, Globe, X, ShoppingBag } from 'lucide-react';
 import { StoreTheme } from '../types/index.js';
 import type { Locale } from '@telegram-commerce/i18n';
 import { useI18n } from '../i18n/useI18n.js';
@@ -35,7 +35,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-20 bg-[var(--c-bg)] border-b border-[var(--c-separator)] px-4 pt-3 pb-3 transition-colors">
-      {/* Top row: Brand & Language */}
+      {/* Top row: Brand, Language & Cart */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           {theme.logoUrl ? (
@@ -62,7 +62,7 @@ export function Header({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Language Switcher */}
           <button
             type="button"
@@ -72,6 +72,19 @@ export function Header({
           >
             <Globe className="w-3 h-3 text-[var(--c-hint)]" />
             <span>{locale.toUpperCase()}</span>
+          </button>
+
+          {/* Cart Button */}
+          <button
+            type="button"
+            onClick={onOpenCart}
+            aria-label="View Shopping Cart"
+            className="relative inline-flex items-center justify-center h-7 px-2.5 rounded-full bg-[var(--c-secondary)] text-[var(--c-text)] text-xs font-medium gap-1"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-[var(--c-text)]" />
+            {cartCount > 0 && (
+              <span className="font-semibold text-[var(--c-brand-ink)] tabular">{cartCount}</span>
+            )}
           </button>
         </div>
       </div>
@@ -91,6 +104,7 @@ export function Header({
               type="button"
               onClick={() => onSearchChange('')}
               className="p-1 text-[var(--c-hint)] hover:text-[var(--c-text)]"
+              aria-label="Очистить поиск"
             >
               <X className="w-3.5 h-3.5" />
             </button>

@@ -9,8 +9,14 @@ interface ProductCardProps {
   inCartQty: number;
   onAddToCart: (product: Product) => void;
   onClickProduct: (product: Product) => void;
-  onUpdateQty?: (productId: string, quantity: number) => void;
+  onUpdateQty?: (productId: string, quantity: number, variant?: string) => void;
 }
+
+const VARIANT_BTN_COPY = {
+  ru: { select: 'Выбрать вариант', inCart: 'В корзине' },
+  uz: { select: 'Variantni tanlash', inCart: 'Savatda' },
+  en: { select: 'Select option', inCart: 'In cart' },
+} as const;
 
 export function ProductCard({
   product,
@@ -20,13 +26,19 @@ export function ProductCard({
   onClickProduct,
   onUpdateQty,
 }: ProductCardProps) {
-  const { t, formatCurrency } = useI18n();
+  const { t, locale, formatCurrency } = useI18n();
   const isOutOfStock = product.stock <= 0;
+  const variants = Array.isArray(product.variants)
+    ? product.variants.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+  const hasVariants = variants.length > 0;
+
   const image =
     product.images?.[0] ||
     'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=400&q=80';
 
   const categoryTranslated = translateCategory(t, product.category);
+  const vCopy = VARIANT_BTN_COPY[locale] || VARIANT_BTN_COPY.ru;
 
   return (
     <div
@@ -63,6 +75,23 @@ export function ProductCard({
           <h3 className="text-sm font-medium text-[var(--c-text)] line-clamp-2 mt-0.5 leading-snug">
             {product.title}
           </h3>
+          {hasVariants && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {variants.slice(0, 4).map((v) => (
+                <span
+                  key={v}
+                  className="px-1.5 py-0.5 rounded bg-[var(--c-secondary)] border border-[var(--c-separator)] text-[10px] font-medium text-[var(--c-hint)]"
+                >
+                  {v}
+                </span>
+              ))}
+              {variants.length > 4 && (
+                <span className="text-[10px] text-[var(--c-hint)] self-center">
+                  +{variants.length - 4}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Price & Action */}
@@ -71,11 +100,31 @@ export function ProductCard({
             {formatCurrency(Number(product.price), currency)}
           </div>
 
-          {inCartQty > 0 ? (
-            <div
-              className="stepper"
-              onClick={(e) => e.stopPropagation()}
+          {hasVariants ? (
+            <button
+              type="button"
+              disabled={isOutOfStock}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClickProduct(product);
+              }}
+              className="btn-tinted text-xs"
             >
+              {isOutOfStock ? (
+                <span>{t('product.sold_out')}</span>
+              ) : inCartQty > 0 ? (
+                <span>
+                  {vCopy.inCart} ({inCartQty}) · +
+                </span>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  <span>{vCopy.select}</span>
+                </>
+              )}
+            </button>
+          ) : inCartQty > 0 ? (
+            <div className="stepper" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 onClick={() => onUpdateQty && onUpdateQty(product.id, inCartQty - 1)}

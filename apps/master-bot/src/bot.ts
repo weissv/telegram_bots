@@ -1,7 +1,13 @@
 import { Bot, session, InlineKeyboard, type Context, type SessionFlavor } from 'grammy';
 import { conversations, createConversation, type ConversationFlavor } from '@grammyjs/conversations';
 import { prisma } from '@telegram-commerce/database';
-import { getEnv, isHttpsUrl, isSafeTelegramUrl, type PlanTier } from '@telegram-commerce/config';
+import {
+  getEnv,
+  isHttpsUrl,
+  isSafeTelegramUrl,
+  verifyBindToken,
+  type PlanTier,
+} from '@telegram-commerce/config';
 import { handleSales } from './handlers/sales.js';
 import { handleDemo } from './handlers/demo.js';
 import {
@@ -9,8 +15,18 @@ import {
   handleAdminSubSuspend,
   handlePricingPlanSelect,
   handlePricingView,
+  handleStandaloneInfo,
   handleSubscriptionConfirm,
 } from './handlers/pricing.js';
+import {
+  handleEmailLinkTextInput,
+  handleLoginCommand,
+  handleResetPasswordCommand,
+  handleStorePayShortcut,
+  handleStoreSelect,
+  performPasswordResetForTenant,
+  startEmailLinkFlow,
+} from './handlers/auth.js';
 import { onboardingConversation } from './conversations/onboarding.js';
 import {
   handleChatBotDemoCatalog,
@@ -19,7 +35,7 @@ import {
   handleChatBotDemoCheckout,
   handleChatBotDemoConfirmPay,
 } from './handlers/chatBotDemo.js';
-import { escapeHtml, formatUzs } from './utils.js';
+import { escapeHtml, formatUzs, getSuperAdminTelegramId, restoreUuid } from './utils.js';
 
 export type MasterBotContext = ConversationFlavor<Context & SessionFlavor<Record<string, any>>>;
 
@@ -30,11 +46,79 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   bot.use(conversations());
   bot.use(createConversation(onboardingConversation as any, 'onboardingConversation'));
 
-  // Start command always resets any stuck conversation and shows the main sales/demo menu
+  // Start command resets any stuck conversation and handles bind_<hex>_<sig> deep links
   bot.command('start', async (ctx) => {
     try {
       await ctx.conversation?.exit('onboardingConversation');
     } catch {}
+    (ctx.session as any).authStep = undefined;
+    (ctx.session as any).pendingLoginEmail = undefined;
+
+    const payload = typeof (ctx as any).match === 'string' ? (ctx as any).match.trim() : '';
+
+    if (payload.startsWith('bind_')) {
+      const env = getEnv();
+      const callerId = ctx.from?.id ? String(ctx.from.id) : '';
+      const verified = verifyBindToken(payload, env.JWT_SECRET);
+
+      if (!verified.valid || !verified.tenantId) {
+        await ctx.reply(
+          '⚠️ <b>Недействительная или устаревшая ссылка привязки магазина.</b>\n\n' +
+            'Используйте /login для входа по Email и паролю с сайта или /newstore для создания нового магазина.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: verified.tenantId },
+        include: {
+          botConfig: true,
+          subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
+      });
+
+      if (!tenant) {
+        await ctx.reply('⚠️ Магазин по этой ссылке не найден. Создайте новый через /newstore.');
+        return;
+      }
+
+      if (
+        tenant.owner_telegram_id &&
+        tenant.owner_telegram_id.trim() !== '' &&
+        tenant.owner_telegram_id.trim() !== callerId
+      ) {
+        await ctx.reply(
+          '⛔ <b>Этот магазин уже привязан к другому Telegram-аккаунту.</b>\n\n' +
+            'Войдите в веб-панель управления или обратитесь в поддержку платформы.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      if ((!tenant.owner_telegram_id || tenant.owner_telegram_id.trim() === '') && callerId) {
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: { owner_telegram_id: callerId },
+        });
+      }
+
+      (ctx.session as any).bindTenantId = tenant.id;
+      (ctx.session as any).activeTenantId = tenant.id;
+
+      const subStatus =
+        tenant.subscriptions?.[0]?.status || (tenant as any).subscription_status || 'PENDING_PAYMENT';
+      await ctx.reply(
+        `✅ <b>Магазин «${escapeHtml(tenant.name)}» привязан к вашему Telegram!</b>\n` +
+          `📦 <b>Тариф:</b> <code>${tenant.plan}</code>\n` +
+          `📌 <b>Статус подписки:</b> <code>${escapeHtml(String(subStatus))}</code>`,
+        { parse_mode: 'HTML' }
+      );
+
+      await ctx.conversation.enter('onboardingConversation');
+      return;
+    }
+
     await handleSales(ctx);
   });
 
@@ -42,9 +126,30 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     try {
       await ctx.conversation?.exit('onboardingConversation');
     } catch {}
+    (ctx.session as any).authStep = undefined;
+    (ctx.session as any).pendingLoginEmail = undefined;
+    (ctx.session as any).bindTenantId = undefined;
     await ctx.reply('❌ <b>Действие отменено.</b>\n\nВведите /start для возврата в главное меню.', {
       parse_mode: 'HTML',
     });
+  });
+
+  bot.command('login', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    (ctx.session as any).authStep = undefined;
+    (ctx.session as any).pendingLoginEmail = undefined;
+    await handleLoginCommand(ctx);
+  });
+
+  bot.command('resetpassword', async (ctx) => {
+    try {
+      await ctx.conversation?.exit('onboardingConversation');
+    } catch {}
+    (ctx.session as any).authStep = undefined;
+    (ctx.session as any).pendingLoginEmail = undefined;
+    await handleResetPasswordCommand(ctx);
   });
 
   bot.command('demo', async (ctx) => {
@@ -62,6 +167,8 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   });
 
   bot.command('newstore', async (ctx) => {
+    (ctx.session as any).bindTenantId = undefined;
+    (ctx.session as any).authStep = undefined;
     await ctx.conversation.enter('onboardingConversation');
   });
 
@@ -92,8 +199,8 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 
     await ctx.reply(
       `🛍️ <b>MODA Tashkent • Telegram Commerce</b>\n\n` +
-      `Откройте витрину интернет-магазина в один клик. Полноэкранный Telegram Mini App, каталог, быстрый поиск и моментальный чекаут!\n\n` +
-      `👇 Нажмите кнопку ниже для запуска витрины:`,
+        `Откройте витрину интернет-магазина в один клик. Полноэкранный Telegram Mini App, каталог, быстрый поиск и моментальный чекаут!\n\n` +
+        `👇 Нажмите кнопку ниже для запуска витрины:`,
       { parse_mode: 'HTML', reply_markup: keyboard }
     );
   });
@@ -134,11 +241,15 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
         const statusEmoji =
           ord.status === 'PAID'
             ? '✅ Оплачен'
-            : ord.status === 'PENDING'
-            ? '⏳ Ожидает оплаты'
-            : ord.status === 'DELIVERED'
-            ? '🚚 Доставлен'
-            : '❌ Отменен';
+            : ord.status === 'PAYMENT_REVIEW'
+              ? '🔍 Проверка оплаты'
+              : ord.status === 'PENDING'
+                ? '⏳ Ожидает оплаты'
+                : ord.status === 'DELIVERED'
+                  ? '🚚 Доставлен'
+                  : ord.status === 'REFUNDED'
+                    ? '↩️ Возврат'
+                    : '❌ Отменен';
         text += `• <b>Заказ #${ord.id.slice(0, 8)}</b> — ${new Intl.NumberFormat('ru-RU').format(Number(ord.total_amount))} сум\n  Статус: ${statusEmoji}\n  Дата: ${new Date(ord.createdAt).toLocaleDateString()}\n\n`;
       }
 
@@ -152,15 +263,17 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
   bot.command('help', async (ctx) => {
     await ctx.reply(
       `ℹ️ <b>Навигация по платформе</b>\n\n` +
-      `• /start — Главное меню и выбор демо-версий\n` +
-      `• /catalog — Полноэкранный Telegram Mini App\n` +
-      `• /demo — Интерактивные демо (Mini App и Admin)\n` +
-      `• /botdemo — Демо обычного бота с покупками прямо в чате\n` +
-      `• /pricing — Тарифы и оплата подписки через Paynet\n` +
-      `• /cart — Корзина и оформление заказа\n` +
-      `• /orders — История и статусы ваших заказов\n` +
-      `• /newstore — Создать свой магазин за 2 минуты\n\n` +
-      `💬 По вопросам поддержки: обратитесь к администратору магазина.`,
+        `• /start — Главное меню и выбор демо-версий\n` +
+        `• /login — Ваши магазины и привязка аккаунта по Email\n` +
+        `• /resetpassword — Сброс пароля от Admin-панели\n` +
+        `• /newstore — Подключить своего бота и создать магазин\n` +
+        `• /pricing — Тарифы и оплата подписки через Paynet\n` +
+        `• /catalog — Полноэкранный Telegram Mini App (демо)\n` +
+        `• /demo — Интерактивные демо (Mini App и Admin)\n` +
+        `• /botdemo — Демо обычного бота с покупками прямо в чате\n` +
+        `• /cart — Корзина демо-бота\n` +
+        `• /orders — История и статусы заказов\n\n` +
+        `💬 По вопросам поддержки: обратитесь в поддержку платформы.`,
       { parse_mode: 'HTML' }
     );
   });
@@ -184,6 +297,9 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     });
   });
 
+  // Text handler for email+password linking via /login
+  bot.on('message:text', handleEmailLinkTextInput);
+
   // Callbacks for language
   bot.callbackQuery('lang:select', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -206,11 +322,54 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
       chosen === 'ru'
         ? '✅ Язык установлен: Русский 🇷🇺'
         : chosen === 'uz'
-        ? "✅ Til tanlandi: O'zbekcha 🇺🇿"
-        : '✅ Language set: English 🇬🇧';
+          ? "✅ Til tanlandi: O'zbekcha 🇺🇿"
+          : '✅ Language set: English 🇬🇧';
     await ctx.answerCallbackQuery({ text: msg });
     await ctx.reply(msg);
     await handleSales(ctx);
+  });
+
+  // Callbacks for Auth & Multi-store management
+  bot.callbackQuery('auth:stores', async (ctx) => {
+    await ctx.answerCallbackQuery();
+    await handleLoginCommand(ctx);
+  });
+
+  bot.callbackQuery('auth:link_email', async (ctx) => {
+    await startEmailLinkFlow(ctx);
+  });
+
+  bot.callbackQuery('auth:cancel', async (ctx) => {
+    (ctx.session as any).authStep = undefined;
+    (ctx.session as any).pendingLoginEmail = undefined;
+    await ctx.answerCallbackQuery({ text: 'Отменено' });
+    await ctx.reply('❌ Привязка аккаунта отменена.');
+  });
+
+  bot.callbackQuery(/^store:select:([^:]+)$/, async (ctx) => {
+    await handleStoreSelect(ctx, ctx.match[1]);
+  });
+
+  bot.callbackQuery(/^store:resetpw:([^:]+)$/, async (ctx) => {
+    await performPasswordResetForTenant(ctx, ctx.match[1]);
+  });
+
+  bot.callbackQuery(/^store:pay:([^:]+)$/, async (ctx) => {
+    await handleStorePayShortcut(ctx, ctx.match[1]);
+  });
+
+  bot.callbackQuery(/^store:connectbot:([^:]+)$/, async (ctx) => {
+    const userId = ctx.from?.id ? String(ctx.from.id) : '';
+    const tenantId = restoreUuid(ctx.match[1]);
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant || (tenant.owner_telegram_id && tenant.owner_telegram_id !== userId)) {
+      await ctx.answerCallbackQuery({ text: '⛔ Доступ запрещён', show_alert: true });
+      return;
+    }
+    (ctx.session as any).bindTenantId = tenant.id;
+    (ctx.session as any).activeTenantId = tenant.id;
+    await ctx.answerCallbackQuery();
+    await ctx.conversation.enter('onboardingConversation');
   });
 
   // Callbacks for Main Navigation & Pricing
@@ -229,29 +388,43 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
     await handlePricingView(ctx);
   });
 
+  bot.callbackQuery('pricing:standalone_info', async (ctx) => {
+    await handleStandaloneInfo(ctx);
+  });
+
   bot.callbackQuery(/^pricing:plan:(BASIC_20|PRO_30|STANDALONE_LIFETIME)$/, async (ctx) => {
     await handlePricingPlanSelect(ctx, ctx.match[1] as PlanTier);
   });
 
-  bot.callbackQuery(/^sub:confirm:(.+):(.+)$/, async (ctx) => {
+  bot.callbackQuery(/^sub:confirm:([^:]+):([^:]+)$/, async (ctx) => {
     await handleSubscriptionConfirm(ctx, ctx.match[1], ctx.match[2]);
   });
 
-  bot.callbackQuery(/^admin:sub:approve:(.+):(.+)$/, async (ctx) => {
+  bot.callbackQuery(/^sub:confirm:([^:]+)$/, async (ctx) => {
+    await handleSubscriptionConfirm(ctx, ctx.match[1]);
+  });
+
+  bot.callbackQuery(/^admin:sub:approve:([^:]+):([^:]+)$/, async (ctx) => {
     await handleAdminSubApprove(ctx, ctx.match[1], ctx.match[2]);
   });
 
-  bot.callbackQuery(/^admin:sub:suspend:(.+)$/, async (ctx) => {
+  bot.callbackQuery(/^admin:sub:approve:([^:]+)$/, async (ctx) => {
+    await handleAdminSubApprove(ctx, ctx.match[1]);
+  });
+
+  bot.callbackQuery(/^admin:sub:suspend:([^:]+)$/, async (ctx) => {
     await handleAdminSubSuspend(ctx, ctx.match[1]);
   });
 
   bot.callbackQuery('onboard:start', async (ctx) => {
+    (ctx.session as any).bindTenantId = undefined;
     await ctx.answerCallbackQuery();
     await ctx.conversation.enter('onboardingConversation');
   });
 
   bot.callbackQuery('onboard:cancel', async (ctx) => {
-    await ctx.answerCallbackQuery({ text: 'Создание магазина отменено' });
+    await ctx.answerCallbackQuery({ text: 'Настройка магазина отменена' });
+    (ctx.session as any).bindTenantId = undefined;
     try {
       await ctx.conversation?.exit('onboardingConversation');
     } catch {}
@@ -313,9 +486,9 @@ export function createMasterBot(token: string): Bot<MasterBotContext> {
 async function sendAdminDashboard(ctx: Context, isEdit = false) {
   const userId = String(ctx.from?.id);
   const env = getEnv();
-  const superAdminId = env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731';
+  const superAdminId = getSuperAdminTelegramId();
 
-  if (userId !== superAdminId && userId !== '8240936731') {
+  if (userId !== superAdminId) {
     await ctx.reply('⛔ <b>Доступ запрещен:</b> Эта команда доступна только главному администратору платформы.', {
       parse_mode: 'HTML',
     });

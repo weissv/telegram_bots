@@ -65,13 +65,18 @@ export const ru: TranslationDictionary = {
   'orders.empty': '📋 <b>У вас пока нет заказов.</b>\n\nНачните покупки в 📦 Каталоге!',
   'orders.browse': '📦 Перейти в каталог',
   'orders.status_pending': '⏳ Ожидает оплаты',
+  'orders.status_payment_review': '🔍 Проверка оплаты',
   'orders.status_paid': '✅ Оплачен / В обработке',
   'orders.status_delivered': '🚚 Доставлен',
   'orders.status_cancelled': '❌ Отменён',
+  'orders.status_refunded': '↩️ Возврат оформлен',
   'orders.order_line': '🧾 <b>Заказ #{orderId}</b>\n📅 <i>{date}</i>\n📊 <b>Статус:</b> {status}\n💰 <b>Сумма:</b> <code>{total}</code>\n📦 <i>Товары: {items}</i>',
+  'orders.notify_payment_review': '🔍 <b>Заявка об оплате заказа #{orderId} получена!</b>\n\nМы отправили данные на проверку оператору магазина. После подтверждения зачисления средств вы получите уведомление.',
   'orders.notify_paid': '✅ <b>Оплата по заказу #{orderId} подтверждена!</b>\n\nМы уже готовим ваш заказ к отправке.',
+  'orders.notify_paid_with_receipt': '✅ <b>Оплата по заказу #{orderId} подтверждена!</b>\n\nМы уже готовим ваш заказ к отправке.\n🧾 Фискальный чек: {receiptUrl}',
   'orders.notify_delivered': '🚚 <b>Заказ #{orderId} доставлен!</b>\n\nСпасибо за покупку! Будем рады видеть вас снова.',
   'orders.notify_cancelled': '❌ <b>Заказ #{orderId} отменён.</b>\n\nЕсли у вас есть вопросы, свяжитесь с магазином.',
+  'orders.notify_refunded': '↩️ <b>По заказу #{orderId} оформлен возврат.</b>\n\nЕсли у вас есть вопросы, обратитесь в поддержку магазина.',
 
   // ─── WebApp ───
   'webapp.launch': '🚀 Откройте интерактивный магазин ниже:',
@@ -94,6 +99,12 @@ export const ru: TranslationDictionary = {
   'merchant.new_order': '🔔 <b>НОВЫЙ ЗАКАЗ!</b>\n\n🧾 Заказ: <code>#{orderId}</code>\n💰 Сумма: <b>{total}</b>\n👤 Покупатель: {customerName}\n📱 Telegram ID: <code>{telegramId}</code>\n📦 Товары:\n{items}',
 
   // ─── Billing / Subscription ───
+  'billing.status_pending_payment': 'Ожидает оплаты',
+  'billing.status_pending_review': 'На проверке',
+  'billing.status_active': 'Активна',
+  'billing.status_past_due': 'Просрочена',
+  'billing.status_canceled': 'Отменена',
+  'billing.status_trialing': 'Пробный период',
   'billing.expired_warning': '🔔 <b>Напоминание о продлении подписки</b>\n\nПодписка для <b>{storeName}</b> недавно истекла. Осталось <b>{days} дн.</b> льготного периода.\n\nПродлите тариф, чтобы избежать приостановки.',
   'billing.deactivated': '⚠️ <b>Магазин приостановлен</b>\n\nПодписка для <b>{storeName}</b> истекла и льготный период закончился. Ваш бот-магазин приостановлен.\n\nПродлите подписку в личном кабинете.',
 
@@ -179,17 +190,40 @@ export const ru: TranslationDictionary = {
   'checkout.paynet_confirm_btn': '✅ Я оплатил заказ',
   'checkout.paynet_scan_qr': 'Или отсканируйте QR-код в мобильном банке:',
   'checkout.paynet_waiting_notice': 'Заказ зарегистрирован. Ожидаем подтверждение оплаты.',
+  'checkout.delivery_method': 'Способ получения',
+  'checkout.delivery_courier': 'Доставка курьером',
+  'checkout.delivery_pickup': 'Самовывоз',
+  'checkout.items_subtotal': 'Товары',
+  'checkout.delivery_fee': 'Доставка',
+  'checkout.delivery_free': 'Бесплатно',
+  'checkout.free_delivery_hint': 'Бесплатная доставка от {threshold}',
+  'checkout.phone_required': 'Укажите контактный телефон для связи по заказу',
+  'checkout.address_required': 'Укажите адрес доставки',
+  'checkout.payment_review_notice': 'Заявка об оплате заказа #{orderId} отправлена на проверку оператору магазина.',
+  'checkout.paynet_unavailable': 'Онлайн-оплата временно отключена продавцом. Обратитесь в поддержку магазина.',
+  'checkout.store_not_published': 'Магазин ещё не опубликован продавцом.',
+  'checkout.demo_disabled': 'Демо-витрина: приём реальных заказов и оплат отключён.',
 
   // ─── Order Success ───
   'success.heading': 'Заказ оплачен!',
+  'success.heading_review': 'Заявка на проверке!',
   'success.subtitle': 'Мы уже начали готовить ваш заказ к отправке.',
+  'success.subtitle_review': 'Оплата отправлена на проверку оператору магазина. После подтверждения вы получите уведомление.',
   'success.order_num': 'Номер: #{id}',
   'success.items_qty': 'Позиций в заказе:',
   'success.total_paid': 'Сумма оплаты:',
   'success.status_label': 'Статус:',
   'success.status_paid': 'Оплачено',
+  'success.status_review': 'На проверке у оператора',
   'success.back_catalog': 'Вернуться в магазин',
   'success.close_app': 'Закрыть приложение',
+
+  // ─── Errors ───
+  'errors.unauthorized': 'Доступ запрещён. Требуется токен заказа или авторизация Telegram.',
+  'errors.order_not_found': 'Заказ не найден.',
+  'errors.invalid_status': 'Некорректный статус заказа.',
+  'errors.payment_id_required': 'Для подтверждения оплаты укажите номер транзакции / чека (paymentId).',
+  'errors.duplicate_payment_id': 'Этот номер транзакции (paymentId) уже использован для другого заказа.',
 
   // ─── Header ───
   'header.default_title': 'Каталог товаров',

@@ -57,14 +57,15 @@ echo -e "${BLUE}⚙️  [3/7] Configuring Standalone Environment...${NC}"
 
 if [ -f .env.standalone ]; then
   echo -e "${YELLOW}Reading existing .env.standalone file...${NC}"
-  export $(grep -v '^#' .env.standalone | xargs)
+  set -a
+  # shellcheck disable=SC1091
+  source .env.standalone
+  set +a
 fi
 
 DOMAIN_NAME="${DOMAIN_NAME:-}"
-BOT_TOKEN="${BOT_TOKEN:-}"
-ADMIN_TELEGRAM_ID="${ADMIN_TELEGRAM_ID:-}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@${DOMAIN_NAME:-example.com}}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 12)}"
+BOT_TOKEN="${BOT_TOKEN:-${STANDALONE_BOT_TOKEN:-}}"
+ADMIN_TELEGRAM_ID="${ADMIN_TELEGRAM_ID:-${STANDALONE_ADMIN_TELEGRAM_ID:-}}"
 
 if [ -z "$DOMAIN_NAME" ]; then
   read -rp "Enter your primary Domain Name (e.g. shop.example.com): " DOMAIN_NAME
@@ -78,20 +79,26 @@ if [ -z "$ADMIN_TELEGRAM_ID" ]; then
   read -rp "Enter your Personal Telegram User ID (for instant order alerts): " ADMIN_TELEGRAM_ID
 fi
 
-# Generate cryptographically secure keys
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-JWT_SECRET=$(openssl rand -hex 24)
-DB_PASSWORD=$(openssl rand -hex 16)
-WEBHOOK_SECRET=$(openssl rand -hex 32)
-STANDALONE_TENANT_ID="00000000-0000-0000-0000-000000000001"
+ADMIN_EMAIL="${ADMIN_EMAIL:-admin@${DOMAIN_NAME}}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 16 | tr -d '/+=')}"
+
+# Reuse existing secrets if re-running, otherwise generate cryptographically secure keys
+ENCRYPTION_KEY="${ENCRYPTION_KEY:-$(openssl rand -hex 32)}"
+JWT_SECRET="${JWT_SECRET:-$(openssl rand -hex 24)}"
+DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -hex 16)}"
+WEBHOOK_SECRET="${WEBHOOK_SECRET:-$(openssl rand -hex 32)}"
+STANDALONE_TENANT_ID="${STANDALONE_TENANT_ID:-00000000-0000-0000-0000-000000000001}"
 
 # Write .env.standalone
 cat <<EOF > .env.standalone
+NODE_ENV=production
 MODE=standalone
 DOMAIN_NAME=${DOMAIN_NAME}
 ACME_EMAIL=${ADMIN_EMAIL}
 BOT_TOKEN=${BOT_TOKEN}
+STANDALONE_BOT_TOKEN=${BOT_TOKEN}
 ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
+STANDALONE_ADMIN_TELEGRAM_ID=${ADMIN_TELEGRAM_ID}
 ADMIN_EMAIL=${ADMIN_EMAIL}
 ADMIN_PASSWORD=${ADMIN_PASSWORD}
 
@@ -100,34 +107,50 @@ ENCRYPTION_KEY=${ENCRYPTION_KEY}
 JWT_SECRET=${JWT_SECRET}
 DB_PASSWORD=${DB_PASSWORD}
 WEBHOOK_SECRET=${WEBHOOK_SECRET}
+REDIS_URL=redis://redis:6379
 
 PUBLIC_API_URL=https://api.${DOMAIN_NAME}
 PUBLIC_MINIAPP_URL=https://${DOMAIN_NAME}
 PUBLIC_ADMIN_URL=https://admin.${DOMAIN_NAME}
 EOF
+chmod 600 .env.standalone
 
 echo -e "${GREEN}✅ Environment configuration saved to .env.standalone${NC}"
 
 # 5. Launch Docker Stack
-echo -e "${BLUE}🚀 [4/7] Launching Docker Containers (Traefik SSL, PostgreSQL, API, Mini App, Admin)...${NC}"
+echo -e "${BLUE}🚀 [4/7] Launching Docker Containers (Traefik SSL, PostgreSQL, Redis, API, Mini App, Admin)...${NC}"
 docker compose -f docker/docker-compose.standalone.yml --env-file .env.standalone up -d --build
 
 # 6. Wait for Database & Run Migrations
 echo -e "${BLUE}🗄️  [5/7] Waiting for PostgreSQL database initialization...${NC}"
-sleep 8
+for i in $(seq 1 30); do
+  if docker exec standalone_postgres pg_isready -U standalone_user -d telegram_commerce_standalone > /dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo -e "${RED}❌ PostgreSQL did not become ready in time.${NC}"
+    exit 1
+  fi
+  sleep 2
+done
 
-echo -e "${BLUE}🔄 [6/7] Running database migrations & seeder...${NC}"
-docker exec -i standalone_api npx prisma db push --schema packages/database/prisma/schema.prisma
-docker exec -i standalone_api npx tsx scripts/seed.ts
+echo -e "${BLUE}🔄 [6/7] Running database schema push & compiled seeder...${NC}"
+docker exec -i standalone_api pnpm --filter @telegram-commerce/database exec prisma db push --skip-generate
+docker exec -i standalone_api node -e "import('./apps/api/dist/services/seedService.js').then(m => m.ensureDatabaseSeeded()).then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })"
 
 # 7. Configure Telegram Bot Webhook & Menu Button
 echo -e "${BLUE}🤖 [7/7] Registering Webhook & Mini App Menu Button with Telegram API...${NC}"
 
-# Set Webhook
-WEBHOOK_URL="https://api.${DOMAIN_NAME}/api/v1/webhooks/${STANDALONE_TENANT_ID}"
-curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+# Set Webhook and verify response strictly
+WEBHOOK_URL="https://api.${DOMAIN_NAME}/api/v1/webhooks/telegram/${STANDALONE_TENANT_ID}"
+WEBHOOK_RESP=$(curl -fsS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
   -H "Content-Type: application/json" \
-  -d "{\"url\":\"${WEBHOOK_URL}\",\"secret_token\":\"${WEBHOOK_SECRET}\"}" | jq .
+  -d "{\"url\":\"${WEBHOOK_URL}\",\"secret_token\":\"${WEBHOOK_SECRET}\"}")
+echo "$WEBHOOK_RESP" | jq .
+if ! echo "$WEBHOOK_RESP" | jq -e '.ok == true' > /dev/null; then
+  echo -e "${RED}❌ Failed to register Telegram webhook!${NC}"
+  exit 1
+fi
 
 # Set Chat Menu Button
 MINIAPP_URL="https://${DOMAIN_NAME}?tenant_id=${STANDALONE_TENANT_ID}"

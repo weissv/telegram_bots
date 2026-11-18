@@ -13,6 +13,8 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 chars'),
 
   MASTER_BOT_TOKEN: z.string().optional(),
+  MASTER_BOT_USERNAME: z.string().default('miraiedu_bot'),
+  ALLOW_DEMO_LOGIN: z.string().optional(),
 
   PUBLIC_API_URL: z.string().default('https://mirai-edu.space'),
   PUBLIC_MINIAPP_URL: z.string().default('https://mirai-edu.space/miniapp'),
@@ -28,6 +30,7 @@ export const envSchema = z.object({
   STANDALONE_TENANT_ID: z.string().default('00000000-0000-0000-0000-000000000001'),
   STANDALONE_BOT_TOKEN: z.string().optional(),
   STANDALONE_ADMIN_TELEGRAM_ID: z.string().optional(),
+  SUPERADMIN_TELEGRAM_ID: z.string().optional(),
 
   // Payme (Uzbekistan)
   PAYME_MERCHANT_ID: z.string().optional(),
@@ -39,7 +42,7 @@ export const envSchema = z.object({
   CLICK_SECRET_KEY: z.string().optional(),
 
   // Locale
-  DEFAULT_LOCALE: z.enum(['ru', 'uz']).default('ru'),
+  DEFAULT_LOCALE: z.enum(['ru', 'uz', 'en']).default('ru'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
@@ -51,7 +54,10 @@ export function getEnv(): AppEnv {
     const rawEnv: Record<string, any> = {
       ...process.env,
       MASTER_BOT_TOKEN: process.env.MASTER_BOT_TOKEN || undefined,
+      MASTER_BOT_USERNAME: process.env.MASTER_BOT_USERNAME || 'miraiedu_bot',
       STANDALONE_ADMIN_TELEGRAM_ID: process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731',
+      SUPERADMIN_TELEGRAM_ID:
+        process.env.SUPERADMIN_TELEGRAM_ID || process.env.STANDALONE_ADMIN_TELEGRAM_ID || '8240936731',
       PUBLIC_MINIAPP_URL:
         process.env.PUBLIC_MINIAPP_URL ||
         (process.env.PUBLIC_API_URL ? `${process.env.PUBLIC_API_URL.replace(/\/+$/, '')}/miniapp` : 'https://mirai-edu.space/miniapp'),
@@ -66,6 +72,9 @@ export function getEnv(): AppEnv {
     const result = envSchema.safeParse(rawEnv);
     if (!result.success) {
       console.error('❌ Environment validation failed:', JSON.stringify(result.error.format(), null, 2));
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('Environment validation failed in production');
+      }
       // For development/test fallback with sensible defaults if missing
       parsedEnv = envSchema.parse({
         DATABASE_URL: rawEnv.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/telegram_commerce',
