@@ -25,12 +25,54 @@ export async function createServer(): Promise<FastifyInstance> {
 
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
+    trustProxy: true,
     bodyLimit: 10 * 1024 * 1024, // 10MB
   });
 
-  // CORS
+  // Security headers (preserve Mini App Telegram iframe embedding)
+  fastify.addHook('onSend', async (request, reply, payload) => {
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    if (!request.url.startsWith('/miniapp')) {
+      reply.header('X-Frame-Options', 'SAMEORIGIN');
+    }
+    return payload;
+  });
+
+  // CORS allowlist
+  const allowedOrigins = new Set<string>([
+    'https://mirai-edu.space',
+    'https://www.mirai-edu.space',
+    'https://web.telegram.org',
+    'https://t.me',
+  ]);
+  for (const candidateUrl of [
+    env.PUBLIC_API_URL,
+    env.PUBLIC_MINIAPP_URL,
+    env.PUBLIC_ADMIN_URL,
+    env.PUBLIC_LANDING_URL,
+  ]) {
+    try {
+      if (candidateUrl) allowedOrigins.add(new URL(candidateUrl).origin);
+    } catch {
+      // ignore malformed optional URL
+    }
+  }
+
   await fastify.register(cors, {
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.has(origin) ||
+        (process.env.NODE_ENV !== 'production' &&
+          (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')))
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
@@ -136,7 +178,28 @@ export async function createServer(): Promise<FastifyInstance> {
 
   // Robots.txt
   fastify.get('/robots.txt', async (_req, reply) => {
-    return reply.type('text/plain').send('User-agent: *\nAllow: /\n');
+    return reply.type('text/plain').send(
+      [
+        'User-agent: MJ12bot',
+        'Disallow: /',
+        '',
+        'User-agent: Bytespider',
+        'Disallow: /',
+        '',
+        'User-agent: Baiduspider',
+        'Disallow: /',
+        '',
+        'User-agent: PetalBot',
+        'Disallow: /',
+        '',
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /api/',
+        'Disallow: /webhooks/',
+        'Disallow: /admin/',
+        '',
+      ].join('\n'),
+    );
   });
 
   // Root route: serve Landing if built, otherwise redirect to demo storefront
