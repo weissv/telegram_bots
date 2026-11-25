@@ -1,6 +1,7 @@
 import { Bot } from 'grammy';
-import type { UserFromGetMe } from 'grammy/types';
 import { BotContext, createTenantBot, TenantInfo } from '@telegram-commerce/telegram-engine';
+
+type UserFromGetMe = Bot['botInfo'];
 import { prisma } from '@telegram-commerce/database';
 import { decryptBotToken, getEnv } from '@telegram-commerce/config';
 import { cacheGet, cacheSet, cacheDel } from './redisService.js';
@@ -35,7 +36,7 @@ function buildFallbackBotInfo(botToken: string, botUsername?: string, storeName?
     allows_users_to_create_topics: false,
     can_manage_bots: false,
     supports_join_request_queries: false,
-  };
+  } as UserFromGetMe;
 }
 
 /**
