@@ -251,11 +251,32 @@ describe('Fastify API Routes & Phase 3 Security Remediations', () => {
       expect(body.db).toBe('down');
     });
 
-    it('GET /robots.txt returns plain text allow-all policy', async () => {
+    it('GET /robots.txt blocks scrapers and disallows private paths', async () => {
       const res = await app.inject({ method: 'GET', url: '/robots.txt' });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/plain');
-      expect(res.body).toBe('User-agent: *\nAllow: /\n');
+      expect(res.body).toBe(
+        [
+          'User-agent: MJ12bot',
+          'Disallow: /',
+          '',
+          'User-agent: Bytespider',
+          'Disallow: /',
+          '',
+          'User-agent: Baiduspider',
+          'Disallow: /',
+          '',
+          'User-agent: PetalBot',
+          'Disallow: /',
+          '',
+          'User-agent: *',
+          'Allow: /',
+          'Disallow: /api/',
+          'Disallow: /webhooks/',
+          'Disallow: /admin/',
+          '',
+        ].join('\n'),
+      );
     });
   });
 
