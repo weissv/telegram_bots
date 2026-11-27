@@ -3,24 +3,58 @@
 # 0.25.12 is go1.23.12 and 0.28.2 is go1.26.5. The runtime image copies
 # node_modules, so rebuild those same releases with Go 1.26.11.
 FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS esbuild-stdlib
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache curl ca-certificates
 WORKDIR /src
-# Sources come from the Go module proxy, verified against sum.golang.org, instead
-# of a git clone of a movable tag. The build server's link to github.com has
-# reset mid-clone; the loop retries transient network failures.
+# The toolchain is the pinned base image. GOTOOLCHAIN=local stops Go from
+# downloading another one. The proxy is listed twice so a dropped connection
+# falls through, and go mod download is retried below.
 ENV CGO_ENABLED=0 \
-    GOFLAGS=-trimpath \
-    GOTOOLCHAIN=local
+    GOFLAGS="-trimpath -mod=mod" \
+    GOTOOLCHAIN=local \
+    GOPROXY=https://proxy.golang.org,https://proxy.golang.org,direct \
+    GOSUMDB=sum.golang.org
+# Tag archives instead of git clone: clone died on a reset connection in
+# production. Checksums are the GitHub archive/refs/tags tarballs.
 RUN set -eu; \
     mkdir -p /out; \
-    for v in 0.21.5 0.25.12 0.28.2; do \
-      ok=; \
-      for attempt in 1 2 3 4 5; do \
-        if GOBIN="/tmp/esbuild-${v}" go install "github.com/evanw/esbuild/cmd/esbuild@v${v}"; then ok=1; break; fi; \
-        echo "go install esbuild@v${v} failed (attempt ${attempt}), retrying"; sleep $((attempt * 10)); \
+    fetch_tar() { \
+      url="$1"; dest="$2"; sha="$3"; n=0; \
+      while [ "$n" -lt 10 ]; do \
+        n=$((n + 1)); \
+        if curl --retry 10 --retry-all-errors --retry-delay 5 --connect-timeout 30 -fL -C - -o "$dest" "$url"; then \
+          if echo "${sha}  ${dest}" | sha256sum -c -; then \
+            return 0; \
+          fi; \
+          echo "checksum mismatch for ${dest} (attempt ${n}), discarding" >&2; \
+          rm -f "$dest"; \
+        else \
+          echo "download interrupted (attempt ${n}), will resume: ${url}" >&2; \
+        fi; \
+        sleep 5; \
       done; \
-      [ -n "$ok" ]; \
-      mv "/tmp/esbuild-${v}/esbuild" "/out/esbuild-${v}"; \
+      return 1; \
+    }; \
+    go_retry() { \
+      n=0; \
+      while [ "$n" -lt 10 ]; do \
+        n=$((n + 1)); \
+        if "$@"; then \
+          return 0; \
+        fi; \
+        echo "go command failed (attempt ${n}): $*" >&2; \
+        sleep 5; \
+      done; \
+      return 1; \
+    }; \
+    set -- \
+      0.21.5 b4f83a253a28575ab9bc0e84201138f6293dc655ee74219f670d7cfa20e26a27 \
+      0.25.12 eca56e4242e68ebde6f327458c71457e614a2b0564b30a45d60fc633e0ccaab4 \
+      0.28.2 300162f899361d9f0263065f8728ef9086dcfc1a3d36bcbc4e0abe5de9c58bf8; \
+    while [ "$#" -ge 2 ]; do \
+      v="$1"; sha="$2"; shift 2; \
+      fetch_tar "https://github.com/evanw/esbuild/archive/refs/tags/v${v}.tar.gz" "esbuild-${v}.tar.gz" "$sha"; \
+      tar -xzf "esbuild-${v}.tar.gz"; \
+      (cd "esbuild-${v}" && go_retry go mod download && go_retry go build -o "/out/esbuild-${v}" ./cmd/esbuild); \
       ver_out=$(go version -m "/out/esbuild-${v}"); \
       printf '%s\n' "$ver_out" | grep -q 'go1\.26\.11'; \
       built=$("/out/esbuild-${v}" --version); \
