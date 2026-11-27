@@ -1,16 +1,24 @@
 # See docker/Dockerfile.api. node_modules in this image includes esbuild,
 # whose published binaries embed a vulnerable Go stdlib.
 FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS esbuild-stdlib
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache ca-certificates
 WORKDIR /src
+# Sources come from the Go module proxy, verified against sum.golang.org, instead
+# of a git clone of a movable tag. The build server's link to github.com has
+# reset mid-clone; the loop retries transient network failures.
 ENV CGO_ENABLED=0 \
     GOFLAGS=-trimpath \
     GOTOOLCHAIN=local
 RUN set -eu; \
     mkdir -p /out; \
     for v in 0.21.5 0.25.12 0.28.2; do \
-      git clone --depth 1 --branch "v${v}" https://github.com/evanw/esbuild.git "esbuild-${v}"; \
-      (cd "esbuild-${v}" && go build -o "/out/esbuild-${v}" ./cmd/esbuild); \
+      ok=; \
+      for attempt in 1 2 3 4 5; do \
+        if GOBIN="/tmp/esbuild-${v}" go install "github.com/evanw/esbuild/cmd/esbuild@v${v}"; then ok=1; break; fi; \
+        echo "go install esbuild@v${v} failed (attempt ${attempt}), retrying"; sleep $((attempt * 10)); \
+      done; \
+      [ -n "$ok" ]; \
+      mv "/tmp/esbuild-${v}/esbuild" "/out/esbuild-${v}"; \
       ver_out=$(go version -m "/out/esbuild-${v}"); \
       printf '%s\n' "$ver_out" | grep -q 'go1\.26\.11'; \
       built=$("/out/esbuild-${v}" --version); \
