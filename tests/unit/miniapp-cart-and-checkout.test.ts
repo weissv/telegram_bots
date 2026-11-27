@@ -224,6 +224,10 @@ describe('Mini App Cart Variants, Checkout Blocking & Honest Payment Copy', () =
     const dockerfileApi = fs.readFileSync(path.join(root, 'docker/Dockerfile.api'), 'utf8');
     expect(dockerfileApi).not.toContain('--accept-data-loss');
     expect(dockerfileApi).not.toContain('|| true');
+    // Coolify builds the root Dockerfile: its startup db push must not drop data either
+    const dockerfileRoot = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');
+    expect(dockerfileRoot).not.toContain('--accept-data-loss');
+    expect(dockerfileRoot).not.toContain('|| true');
     expect(dockerfileApi).toContain('COPY --from=builder /app/scripts/ ./scripts/');
 
     const composeSaas = fs.readFileSync(path.join(root, 'docker/docker-compose.saas.yml'), 'utf8');

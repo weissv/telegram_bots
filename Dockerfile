@@ -63,4 +63,7 @@ COPY --from=builder /app/apps/api/ ./apps/api/
 COPY --from=builder /app/node_modules/ ./node_modules/
 
 EXPOSE 3000
-CMD ["sh", "-c", "echo '🔄 Applying Prisma DB schema...' && (pnpm --filter @telegram-commerce/database db:push --accept-data-loss || true) && echo '🚀 Starting API...' && node apps/api/dist/index.js"]
+# db push runs without the data-loss override: a schema change that would drop columns or
+# tables is refused (the API still starts on the current schema) instead of silently
+# deleting shop and order data on boot. Apply destructive changes deliberately.
+CMD ["sh", "-c", "echo '🔄 Applying Prisma DB schema...' && (pnpm --filter @telegram-commerce/database db:push || echo '⚠️ Prisma db push did not apply the schema (possibly a destructive change). Starting on the current schema.') && echo '🚀 Starting API...' && node apps/api/dist/index.js"]
